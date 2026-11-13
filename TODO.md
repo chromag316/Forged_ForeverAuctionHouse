@@ -81,7 +81,9 @@
 
 ## 3. Deals list improvements
 
-1. **Sort by clicking the column headers** in the Deals lists (Item, Buy at, Sell at /
+1. ~~**Sort by clicking the column headers**~~ Done (`StrategyTab.SortBy`). Rows
+   without a value go last; ties keep the engine's ranking; each list keeps its own
+   sort for the session. Sort by clicking the column headers in the Deals lists (Item, Buy at, Sell at /
    Vendor pays / Disenchant, Profit, Return, Sold/day, …): click once for ascending,
    again for descending, with Blizzard's sort arrow on the header. The headers are
    Blizzard's AuctionHouseTableHeaderStringTemplate buttons, currently display only.

@@ -109,7 +109,10 @@ Features so far:
     with a scroll bar, like Blizzard's Buy list (mouse wheel or drag the bar). It refreshes
     when opened and after each scan. Item names are stored with the market data; an
     item the client hasn't loaded yet shows as a gray `item:ID` until its name arrives,
-    then the row updates by itself. The list looks like Blizzard's auction lists (same
+    then the row updates by itself. Click a column header to sort by it (once
+    ascending, again descending, with Blizzard's sort arrow); rows without a value go
+    last, and each list (Resale, Vendor, …) keeps its own sort until you reload. The
+    lists start in the strategy engine's ranking. The list looks like Blizzard's auction lists (same
     border, background, column header buttons, row stripes and highlight).
     - The tab is added the way LibAHTab (used by Auctionator) does it, which avoids
       taint: it isn't added to Blizzard's tab list. With Auctionator installed, it's

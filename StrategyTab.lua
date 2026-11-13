@@ -41,34 +41,35 @@ local results = {}
 local function Money(c) return c and ns.FormatMoney(c) or "" end
 local function Pct(x) return x and (math.floor(x * 100 + .5) .. "%") or "" end
 
--- Each column: { title, width, justify, text = function(row) }
+-- Each column: { title, width, justify, text = function(row), sort field }
+-- (the field of the suggestion its header sorts by; none: not sortable)
 local COLUMNS = {
     resale = {
-        { "Buy at", 110, "RIGHT", function(r) return Money(r.buy) end },
-        { "Sell at", 110, "RIGHT", function(r) return Money(r.sell) end },
-        { "Profit each", 110, "RIGHT", function(r) return Money(r.profit) end },
-        { "Return", 60, "RIGHT", function(r) return Pct(r.roi) end },
-        { "Sold/day", 70, "RIGHT", function(r) return ("%.1f"):format(r.salesPerDay or 0) end },
+        { "Buy at", 110, "RIGHT", function(r) return Money(r.buy) end, "buy" },
+        { "Sell at", 110, "RIGHT", function(r) return Money(r.sell) end, "sell" },
+        { "Profit each", 110, "RIGHT", function(r) return Money(r.profit) end, "profit" },
+        { "Return", 60, "RIGHT", function(r) return Pct(r.roi) end, "roi" },
+        { "Sold/day", 70, "RIGHT", function(r) return ("%.1f"):format(r.salesPerDay or 0) end, "salesPerDay" },
     },
     vendor = {
-        { "Buy at", 110, "RIGHT", function(r) return Money(r.buy) end },
-        { "Vendor pays", 110, "RIGHT", function(r) return Money(r.vendor) end },
-        { "Profit each", 110, "RIGHT", function(r) return Money(r.profit) end },
-        { "Return", 60, "RIGHT", function(r) return Pct(r.roi) end },
-        { "Listed", 70, "RIGHT", function(r) return r.quantity or "" end },
+        { "Buy at", 110, "RIGHT", function(r) return Money(r.buy) end, "buy" },
+        { "Vendor pays", 110, "RIGHT", function(r) return Money(r.vendor) end, "vendor" },
+        { "Profit each", 110, "RIGHT", function(r) return Money(r.profit) end, "profit" },
+        { "Return", 60, "RIGHT", function(r) return Pct(r.roi) end, "roi" },
+        { "Listed", 70, "RIGHT", function(r) return r.quantity or "" end, "quantity" },
     },
     disenchant = {
-        { "Buy at", 110, "RIGHT", function(r) return Money(r.buy) end },
-        { "Disenchant", 110, "RIGHT", function(r) return Money(r.disenchant) end },
-        { "Profit", 110, "RIGHT", function(r) return Money(r.profit) end },
-        { "Return", 60, "RIGHT", function(r) return Pct(r.roi) end },
+        { "Buy at", 110, "RIGHT", function(r) return Money(r.buy) end, "buy" },
+        { "Disenchant", 110, "RIGHT", function(r) return Money(r.disenchant) end, "disenchant" },
+        { "Profit", 110, "RIGHT", function(r) return Money(r.profit) end, "profit" },
+        { "Return", 60, "RIGHT", function(r) return Pct(r.roi) end, "roi" },
         { "", 70, "RIGHT", function() return "" end },
     },
     sell = {
-        { "Count", 50, "RIGHT", function(r) return r.count end },
-        { "Post at", 110, "RIGHT", function(r) return Money(r.price) end },
-        { "Proceeds", 120, "RIGHT", function(r) return Money(r.proceeds) end },
-        { "Market", 110, "RIGHT", function(r) return Money(r.value) end },
+        { "Count", 50, "RIGHT", function(r) return r.count end, "count" },
+        { "Post at", 110, "RIGHT", function(r) return Money(r.price) end, "price" },
+        { "Proceeds", 120, "RIGHT", function(r) return Money(r.proceeds) end, "proceeds" },
+        { "Market", 110, "RIGHT", function(r) return Money(r.value) end, "value" },
         { "", 70, "RIGHT", function(r)
             local notes = {}
             if r.high then notes[#notes + 1] = "high" end
@@ -117,7 +118,8 @@ end
 -- "item:ID" and is redrawn when a name arrives (namesMissing).
 local namesMissing = false
 
-local function ItemName(r)
+-- name, quality (nil if not loaded yet)
+local function ResolveName(r)
     local name, _, quality = GetItemInfo(r.link or r.itemID)
     if name then
         if r.key and not r.link and not ns.Market.Name(r.key) then ns.Market.SetName(r.key, name, quality) end
@@ -132,6 +134,11 @@ local function ItemName(r)
             end
         end
     end
+    return name, quality
+end
+
+local function ItemName(r)
+    local name, quality = ResolveName(r)
     if not name then
         namesMissing = true
         return "|cff808080item:" .. tostring(r.itemID) .. "|r"
@@ -171,11 +178,89 @@ local function DrawRows()
     panel.count:SetText(#results > 0 and (Count(#results) .. (#results == 1 and " suggestion" or " suggestions")) or "")
 end
 
+------------------------------------------------------------------------
+-- Sorting by the column headers
+------------------------------------------------------------------------
+-- Per suggestion type: { col = 0 (Item) or 1-5, asc = true/false }, or nil
+-- for the strategy engine's own ranking. Click a header once for
+-- ascending, again for descending. Rows without a value go last either
+-- way; ties keep the engine's ranking.
+
+local sortState = {}
+
+local function SortField(col)
+    if col == 0 then return "name" end
+    local c = COLUMNS[currentType][col]
+    return c and c[5]
+end
+
+function StrategyTab.SortResults(list, state)
+    if not state then return list end
+    local field = SortField(state.col)
+    if not field then return list end
+    local keyed = {}
+    for i, r in ipairs(list) do
+        local v
+        if field == "name" then
+            local name = ResolveName(r)
+            v = name and name:lower()
+        else
+            v = r[field]
+        end
+        keyed[i] = { r = r, v = v, i = i }
+    end
+    table.sort(keyed, function(a, b)
+        if a.v == nil or b.v == nil then
+            if a.v == nil and b.v == nil then return a.i < b.i end
+            return b.v == nil
+        end
+        if a.v == b.v then return a.i < b.i end
+        if state.asc then return a.v < b.v end
+        return a.v > b.v
+    end)
+    for i, k in ipairs(keyed) do list[i] = k.r end
+    return list
+end
+
+-- Blizzard's sort arrow (AuctionHouseTableHeaderStringMixin:SetArrowState):
+-- shown on the sorted column, flipped for ascending.
+local function UpdateHeaders()
+    if not panel then return end
+    local state = sortState[currentType]
+    for c = 0, #panel.headers do
+        local h = c == 0 and panel.itemHeader or panel.headers[c]
+        local sortable = SortField(c) ~= nil
+        if h.SetEnabled then h:SetEnabled(sortable) end
+        local arrow = type(h.Arrow) == "table" and h.Arrow
+        if arrow then
+            local shown = sortable and state and state.col == c
+            arrow:SetShown(shown and true or false)
+            if shown then
+                if state.asc then arrow:SetTexCoord(0, 1, 1, 0) else arrow:SetTexCoord(0, 1, 0, 1) end
+            end
+        end
+    end
+end
+
+function StrategyTab.SortBy(col)
+    if not SortField(col) then return end
+    local state = sortState[currentType]
+    if state and state.col == col then
+        state.asc = not state.asc
+    else
+        sortState[currentType] = { col = col, asc = true }
+    end
+    resetScroll = true
+    StrategyTab.Refresh()
+end
+
 function StrategyTab.Refresh()
     if not panel or not panel:IsShown() then return end
     for _, t in ipairs(TYPES) do
         if t[1] == currentType then results = t[3]() end
     end
+    StrategyTab.SortResults(results, sortState[currentType])
+    UpdateHeaders()
     for i, b in ipairs(panel.typeTabs.Tabs) do
         if b.type == currentType then
             if PanelTemplates_SetTab then PanelTemplates_SetTab(panel.typeTabs, i) end
@@ -349,7 +434,8 @@ local function BuildPanel(frame)
     border:SetPoint("BOTTOMRIGHT", list, "BOTTOMRIGHT", 0, 0)
     panel.border = border
 
-    -- Column headers (display only; Blizzard's sort OnClick is replaced).
+    -- Column headers: Blizzard's header buttons; their OnClick (which needs
+    -- Blizzard's table owner) is replaced by StrategyTab.SortBy.
     local headerContainer = CreateFrame("Frame", nil, list)
     headerContainer:SetPoint("TOPLEFT", list, "TOPLEFT", 4, -1)
     headerContainer:SetPoint("TOPRIGHT", list, "TOPRIGHT", -26, -1)
@@ -413,7 +499,7 @@ local function BuildPanel(frame)
         for i = 1, c - 1 do x = x + COLUMNS.resale[i][2] end
         return x
     end
-    local function Header(x, width, last)
+    local function Header(x, width, last, col)
         local ok, h = pcall(CreateFrame, "Button", nil, headerContainer, "AuctionHouseTableHeaderStringTemplate")
         if not ok then
             h = CreateFrame("Button", nil, headerContainer)
@@ -422,7 +508,10 @@ local function BuildPanel(frame)
             fs:SetPoint("LEFT", 8, 0)
             h:SetFontString(fs)
         end
-        h:SetScript("OnClick", nil)
+        h:SetScript("OnClick", function()
+            PlaySound(SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856)
+            StrategyTab.SortBy(col)
+        end)
         if type(h.Arrow) == "table" and h.Arrow.Hide then h.Arrow:Hide() end
         h:ClearAllPoints()
         h:SetPoint("TOPLEFT", headerContainer, "TOPLEFT", x, 0)
@@ -434,9 +523,10 @@ local function BuildPanel(frame)
         return h
     end
     panel.headers = {}
-    Header(0, NAME_WIDTH):SetText("Item")
+    panel.itemHeader = Header(0, NAME_WIDTH, false, 0)
+    panel.itemHeader:SetText("Item")
     for c = 1, 5 do
-        panel.headers[c] = Header(ColumnX(c) - HEADER_OVERLAP, COLUMNS.resale[c][2], c == 5)
+        panel.headers[c] = Header(ColumnX(c) - HEADER_OVERLAP, COLUMNS.resale[c][2], c == 5, c)
     end
 
     -- Rows: Blizzard's virtual scroll list. Only the visible rows exist; they
