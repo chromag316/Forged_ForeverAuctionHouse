@@ -90,6 +90,11 @@ Features so far:
   - Every scan stores, per item, the lowest price and quantity available (only when
     something changed). After a completed scan, items that disappeared get quantity 0.
     Detail is kept for 3 days, then folded into daily summaries kept for 30 days.
+  - **Checked prices**: a scan's prices get old fast (cheap listings, vendor deals
+    especially, are bought within minutes). When you open an item in Blizzard's buy view
+    (from the Deals list or anywhere), its exact lowest price and quantity replace the
+    scan's until the next scan sees the item; a deal that's gone drops off the lists.
+    The sales, trend and volatility figures still come from scans only.
   - Per item it works out the current price and quantity, the market value, estimated
     sales per day (quantity drops between scans; at least 6 hours of data), the price
     trend (last 24 hours vs. the two days before) and volatility.
@@ -107,7 +112,9 @@ Features so far:
     bags with the tabs above the list (styled and placed like Blizzard's Auctions/Bids tabs); hover a row for the item tooltip, click it to open the item in Blizzard's buy view
     (Sell from bags rows open Blizzard's sell view with the item in it). All suggestions are in one scrolling list
     with a scroll bar, like Blizzard's Buy list (mouse wheel or drag the bar). It refreshes
-    when opened and after each scan. Item names are stored with the market data; an
+    when opened and after each scan (the refresh button recalculates from stored data;
+    it doesn't ask the server). A row's tooltip says how old its price is ("Price from
+    scan 6 min ago" or "Price checked just now"). Item names are stored with the market data; an
     item the client hasn't loaded yet shows as a gray `item:ID` until its name arrives,
     then the row updates by itself. Click a column header to sort by it (once
     ascending, again descending, with Blizzard's sort arrow); rows without a value go

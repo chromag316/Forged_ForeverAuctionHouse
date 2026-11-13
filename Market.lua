@@ -108,6 +108,7 @@ function Market.Store(t, seen, complete)
         end
         AddSnapshot(item, t, v.p, v.q)
         if v.lvl and v.lvl > 0 then item.lvl = v.lvl end
+        item.chk = nil -- the scan is newer than any checked price
     end
     if complete then
         for key, item in pairs(data.items) do
@@ -115,10 +116,61 @@ function Market.Store(t, seen, complete)
             if not seen[key] and last and last[3] > 0 then
                 AddSnapshot(item, t, nil, 0)
             end
+            if item.chk and item.chk[1] <= t then item.chk = nil end
         end
         table.insert(data.scans, t)
     end
 end
+
+------------------------------------------------------------------------
+-- Checked prices: an item's exact search (opening it in Blizzard's buy
+-- view, from the Deals list or anywhere) gives its real lowest price and
+-- quantity right now. Stored as item.chk = { time, price, quantity } and
+-- used as the current price until the next scan sees the item. Not a
+-- snapshot: the sales, trend and volatility figures stay scan-only (an
+-- item search can cover one item level of several).
+------------------------------------------------------------------------
+
+function Market.Check(key, price, quantity, level)
+    local item = data and key and data.items[key]
+    if not item then return end -- only items a scan has seen
+    -- Gear: only the item level whose price the lists use.
+    if level and level > 0 and item.lvl and item.lvl > 0 and level ~= item.lvl then return end
+    if not price then quantity = 0 end
+    item.chk = { time(), price, quantity or 0 }
+end
+
+local function CheckCommodity(itemID)
+    if not itemID then return end
+    local lowest
+    for i = 1, C_AuctionHouse.GetNumCommoditySearchResults(itemID) do
+        local r = C_AuctionHouse.GetCommoditySearchResultInfo(itemID, i)
+        if r and r.unitPrice and r.unitPrice > 0 and (not lowest or r.unitPrice < lowest) then lowest = r.unitPrice end
+    end
+    -- No results yet isn't "sold out" until the server says the list is complete.
+    if not lowest and not C_AuctionHouse.HasFullCommoditySearchResults(itemID) then return end
+    Market.Check(itemID .. ":0", lowest, C_AuctionHouse.GetCommoditySearchResultsQuantity(itemID))
+end
+
+local function CheckItem(itemKey)
+    if not itemKey then return end
+    local lowest
+    for i = 1, C_AuctionHouse.GetNumItemSearchResults(itemKey) do
+        local r = C_AuctionHouse.GetItemSearchResultInfo(itemKey, i)
+        if r and r.buyoutAmount and r.buyoutAmount > 0 then
+            local unit = math.ceil(r.buyoutAmount / math.max(1, r.quantity or 1))
+            if not lowest or unit < lowest then lowest = unit end
+        end
+    end
+    if not lowest and not C_AuctionHouse.HasFullItemSearchResults(itemKey) then return end
+    Market.Check(ns.History.KeyFromItemKey(itemKey), lowest,
+        C_AuctionHouse.GetItemSearchResultsQuantity(itemKey), itemKey.itemLevel)
+end
+
+ns:On("COMMODITY_SEARCH_RESULTS_UPDATED", CheckCommodity)
+ns:On("COMMODITY_SEARCH_RESULTS_ADDED", CheckCommodity)
+ns:On("ITEM_SEARCH_RESULTS_UPDATED", CheckItem)
+ns:On("ITEM_SEARCH_RESULTS_ADDED", CheckItem)
 
 ns:Listen("SCAN_FINISHED", function(outcome)
     if not current then return end
@@ -215,8 +267,9 @@ function Market.LastScan()
 end
 
 -- {
---   price, quantity  -- now (last snapshot), quantity 0 if gone
---   listed           -- quantity > 0 in the last snapshot
+--   price, quantity  -- now (checked price or last snapshot), quantity 0 if gone
+--   listed           -- quantity > 0 now
+--   priceTime        -- when that price was confirmed; checked = from an item search
 --   value, today     -- market value / today's minimum (price history)
 --   salesPerDay      -- estimated from quantity drops (nil: too little data)
 --   trend            -- % change: last 24 h average vs. the 48 h before (nil if unknown)
@@ -235,6 +288,16 @@ function Market.Stats(key, now)
     local last = item.s[#item.s]
     stats.price, stats.quantity = last[2], last[3]
     stats.listed = last[3] > 0
+    -- When the price was last confirmed: a checked price (item search), else
+    -- the last snapshot or the last complete scan, which saw every item
+    -- (snapshots are only stored on change).
+    local lastScan = data.scans[#data.scans]
+    stats.priceTime = math.max(last[1], lastScan or 0)
+    if item.chk then
+        stats.price, stats.quantity = item.chk[2], item.chk[3]
+        stats.listed = item.chk[3] > 0 and item.chk[2] ~= nil
+        stats.priceTime, stats.checked = item.chk[1], true
+    end
 
     -- Sales: quantity drops between snapshots, plus daily summaries' sales.
     local sold, prevQ = 0, nil

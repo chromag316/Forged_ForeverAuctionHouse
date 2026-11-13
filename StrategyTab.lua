@@ -575,6 +575,13 @@ local function BuildPanel(frame)
             else
                 GameTooltip:SetItemByID(self.data.itemID)
             end
+            -- How old the row's price is: checked when you opened the item,
+            -- else from a scan.
+            local s = self.data.key and ns.Market.Stats(self.data.key)
+            if s and s.priceTime then
+                GameTooltip:AddLine((s.checked and "Price checked %s" or "Price from scan %s"):format(Ago(s.priceTime)),
+                    1, 1, 1)
+            end
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", GameTooltip_Hide)
