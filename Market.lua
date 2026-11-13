@@ -561,12 +561,31 @@ local function KeyInfoName(itemKey)
     return info and tostring(info.itemName) or "(not loaded)"
 end
 
-ns:RegisterCommand("itemkey", "<item ID or link> - debug: item keys and names of an item", function(args)
-    local itemID = tonumber(args:match("item:(%d+)") or args:match("^%s*(%d+)"))
+-- The item ID for a name: the first tracked item whose stored or client
+-- (base) name matches exactly, else contains the text.
+local function FindItemID(text)
+    text = text:lower():gsub("^%s+", ""):gsub("%s+$", "")
+    if text == "" then return end
+    local partial
+    for key, item in pairs(data and data.items or {}) do
+        local id = tonumber(key:match("^(%d+)"))
+        for _, name in ipairs({ item.n or "", GetItemInfo(id) or "" }) do
+            local lower = name:lower()
+            if lower == text then return id end
+            if not partial and lower ~= "" and lower:find(text, 1, true) then partial = id end
+        end
+    end
+    return partial
+end
+
+ns:RegisterCommand("itemkey", "<item name, ID or link> - debug: item keys and names of an item", function(args)
+    local itemID = tonumber(args:match("item:(%d+)") or args:match("^%s*(%d+)%s*$")) or FindItemID(args)
     if not itemID then
-        ns:Print("Usage: /fah itemkey <item ID or shift-click an item>")
+        ns:Print("Usage: /fah itemkey <item name, item ID or shift-click an item>")
+        if args ~= "" then ns:Print("No tracked item matches \"" .. args .. "\".") end
         return
     end
+    ns:Print(("Item %d (%s):"):format(itemID, tostring((GetItemInfo(itemID)))))
     local prefix = itemID .. ":"
     local any = false
     for key, item in pairs(data and data.items or {}) do
