@@ -17,6 +17,7 @@ local _, ns = ...
 --     items = { ["itemID:suffix"] = {
 --         s = { { t, price, quantity }, ... },  -- snapshots, oldest first
 --         lvl = itemLevel,                      -- for the item key (gear)
+--         ik = { itemID, itemLevel, itemSuffix, ... }, -- cheapest variant's item key
 --         n = name, nq = quality, nk = true?    -- item name (see Item names)
 --         d = { { day, min, max, avgQty, sold }, ... }, -- daily summaries
 --     } },
@@ -66,10 +67,10 @@ local function Collect(results)
             local level = r.itemKey.itemLevel or 0
             local seen = current.seen[key]
             if seen then
-                if price < seen.p then seen.p, seen.lvl = price, level end
+                if price < seen.p then seen.p, seen.lvl, seen.ik = price, level, r.itemKey end
                 seen.q = seen.q + quantity
             else
-                current.seen[key] = { p = price, q = quantity, lvl = level }
+                current.seen[key] = { p = price, q = quantity, lvl = level, ik = r.itemKey }
             end
         end
     end
@@ -108,6 +109,15 @@ function Market.Store(t, seen, complete)
         end
         AddSnapshot(item, t, v.p, v.q)
         if v.lvl and v.lvl > 0 then item.lvl = v.lvl end
+        if type(v.ik) == "table" then
+            -- The cheapest variant's item key, as Blizzard gave it (plain
+            -- values only, for the saved variables).
+            local ik = {}
+            for k, val in pairs(v.ik) do
+                if type(val) == "number" or type(val) == "string" or type(val) == "boolean" then ik[k] = val end
+            end
+            item.ik = ik
+        end
         item.chk = nil -- the scan is newer than any checked price
     end
     if complete then
@@ -405,12 +415,24 @@ end
 
 -- The auction house ItemKey for a history key ("itemID:suffix"), with the
 -- item level last seen in a scan (gear's item keys include it).
+-- Preferably an exact copy of the item key Blizzard's browse results gave
+-- for the item's cheapest variant (item.ik, stored by scans), so it has all
+-- the fields Forever's keys have; else rebuilt with MakeItemKey. Suffix IDs
+-- can be negative.
 function Market.ItemKey(key)
-    local itemID, suffix = key:match("^(%d+):(%d+)$")
+    local item = data and data.items[key]
+    local itemID, suffix = key:match("^(%d+):(%-?%d+)$")
     itemID, suffix = tonumber(itemID), tonumber(suffix) or 0
     if not itemID then return end
-    local item = data and data.items[key]
     local level = item and item.lvl or 0
+    if item and type(item.ik) == "table" then
+        local copy = {}
+        for k, v in pairs(item.ik) do copy[k] = v end
+        copy.itemID = copy.itemID or itemID
+        copy.itemLevel = copy.itemLevel or level
+        copy.itemSuffix = copy.itemSuffix or suffix
+        return copy
+    end
     return C_AuctionHouse.MakeItemKey(itemID, level, suffix)
 end
 
@@ -518,3 +540,51 @@ function Market.Keys()
     for key in pairs(data and data.items or {}) do keys[#keys + 1] = key end
     return keys
 end
+
+------------------------------------------------------------------------
+-- /fah itemkey <item ID or link>: debug for item names. For each tracked
+-- variant of the item: its key, stored item key and name, and what the
+-- auction house's item key info says; then the same for Blizzard's current
+-- browse results of that item (search for it on the Buy tab first).
+------------------------------------------------------------------------
+
+local function Fields(t)
+    if type(t) ~= "table" then return tostring(t) end
+    local parts = {}
+    for k, v in pairs(t) do parts[#parts + 1] = tostring(k) .. "=" .. tostring(v) end
+    table.sort(parts)
+    return "{" .. table.concat(parts, ", ") .. "}"
+end
+
+local function KeyInfoName(itemKey)
+    local info = itemKey and C_AuctionHouse.GetItemKeyInfo(itemKey)
+    return info and tostring(info.itemName) or "(not loaded)"
+end
+
+ns:RegisterCommand("itemkey", "<item ID or link> - debug: item keys and names of an item", function(args)
+    local itemID = tonumber(args:match("item:(%d+)") or args:match("^%s*(%d+)"))
+    if not itemID then
+        ns:Print("Usage: /fah itemkey <item ID or shift-click an item>")
+        return
+    end
+    local prefix = itemID .. ":"
+    local any = false
+    for key, item in pairs(data and data.items or {}) do
+        if key:sub(1, #prefix) == prefix then
+            any = true
+            local itemKey = Market.ItemKey(key)
+            ns:Print(("%s: stored name %s%s, lvl %s, stored key %s"):format(key, tostring(item.n),
+                item.nk and " (full)" or "", tostring(item.lvl), Fields(item.ik)))
+            ns:Print(("    key used %s -> %s"):format(Fields(itemKey), KeyInfoName(itemKey)))
+        end
+    end
+    if not any then ns:Print("No tracked variants of item " .. itemID .. ".") end
+    local browse = 0
+    for _, r in ipairs(C_AuctionHouse.GetBrowseResults() or {}) do
+        if r.itemKey and r.itemKey.itemID == itemID then
+            browse = browse + 1
+            ns:Print(("  browse result %s -> %s"):format(Fields(r.itemKey), KeyInfoName(r.itemKey)))
+        end
+    end
+    if browse == 0 then ns:Print("  (not in Blizzard's current browse results)") end
+end)
