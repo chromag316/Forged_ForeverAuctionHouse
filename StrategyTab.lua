@@ -163,6 +163,31 @@ function StrategyTab.Refresh()
     DrawRows()
 end
 
+-- Clicking a row opens Blizzard's buy view for the item, the same as
+-- clicking it in Blizzard's Buy list: AuctionHouseFrame:SelectBrowseResult
+-- with a browse-style result (item key + lowest price). It picks the
+-- commodity or item buy view and switches the display mode, which also
+-- hides this panel (Tabs.lua).
+--
+-- TEST: this calls Blizzard's frame code from addon code. If buying from
+-- the opened view fails with "Interface action failed because of an
+-- AddOn", this has to go.
+function StrategyTab.OpenInBuyView(r)
+    local frame = AuctionHouseFrame
+    if not frame or not frame.SelectBrowseResult or not r.key then return end
+    local itemKey = ns.Market.ItemKey(r.key)
+    if not itemKey then return end
+    -- Blizzard's function needs the item key's info; it's nil until loaded
+    -- (this call also requests it).
+    if not C_AuctionHouse.GetItemKeyInfo(itemKey) then
+        ns:Print("Item info is still loading; click the row again in a moment.")
+        return
+    end
+    local price = r.buy or ns.Market.Stats(r.key).price or 0
+    PlaySound(SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856)
+    frame:SelectBrowseResult({ itemKey = itemKey, minPrice = price, totalQuantity = 0 })
+end
+
 function StrategyTab.SetType(t)
     currentType, resetScroll = t, true
     StrategyTab.Refresh()
@@ -424,6 +449,9 @@ local function BuildPanel(frame)
             GameTooltip:Show()
         end)
         row:SetScript("OnLeave", GameTooltip_Hide)
+        row:SetScript("OnClick", function(self)
+            if self.data then StrategyTab.OpenInBuyView(self.data) end
+        end)
     end
 
     InitRow = function(row, element)

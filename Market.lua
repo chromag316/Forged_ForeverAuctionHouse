@@ -16,6 +16,7 @@ local _, ns = ...
 --     scans = { time, ... },            -- completed scans (last 3 days)
 --     items = { ["itemID:suffix"] = {
 --         s = { { t, price, quantity }, ... },  -- snapshots, oldest first
+--         lvl = itemLevel,                      -- for the item key (gear)
 --         d = { { day, min, max, avgQty, sold }, ... }, -- daily summaries
 --     } },
 --   }
@@ -60,12 +61,14 @@ local function Collect(results)
         local price, quantity = r.minPrice, r.totalQuantity or 0
         if key and price and price > 0 and quantity > 0 then
             -- Several item levels can share a key: lowest price, summed quantity.
+            -- The cheapest one's item level is kept to rebuild its item key.
+            local level = r.itemKey.itemLevel or 0
             local seen = current.seen[key]
             if seen then
-                seen.p = math.min(seen.p, price)
+                if price < seen.p then seen.p, seen.lvl = price, level end
                 seen.q = seen.q + quantity
             else
-                current.seen[key] = { p = price, q = quantity }
+                current.seen[key] = { p = price, q = quantity, lvl = level }
             end
         end
     end
@@ -103,6 +106,7 @@ function Market.Store(t, seen, complete)
             data.items[key] = item
         end
         AddSnapshot(item, t, v.p, v.q)
+        if v.lvl and v.lvl > 0 then item.lvl = v.lvl end
     end
     if complete then
         for key, item in pairs(data.items) do
@@ -332,6 +336,17 @@ function Market.DailySeries(key, days, now)
         for d = math.max(DayOf(prev[1]), first), today do widen(entry(d), prev[2]) end
     end
     return series
+end
+
+-- The auction house ItemKey for a history key ("itemID:suffix"), with the
+-- item level last seen in a scan (gear's item keys include it).
+function Market.ItemKey(key)
+    local itemID, suffix = key:match("^(%d+):(%d+)$")
+    itemID, suffix = tonumber(itemID), tonumber(suffix) or 0
+    if not itemID then return end
+    local item = data and data.items[key]
+    local level = item and item.lvl or 0
+    return C_AuctionHouse.MakeItemKey(itemID, level, suffix)
 end
 
 -- All item keys with market data.
