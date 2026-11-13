@@ -1,11 +1,7 @@
 # Forged Forever Auction House
 
-Adds features from [Forged Auction House](../Forged_AuctionHouse) (a fork of aux for
-1.12) to Blizzard's own auction house window in **World of Warcraft: Forever**
-(interface 16001).
-
 There is no separate window. Everything is added to Blizzard's auction house UI,
-one feature at a time. See [TODO.md](TODO.md) for the features still to come.
+one feature at a time.
 
 ## Install
 
