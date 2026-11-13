@@ -1,0 +1,17 @@
+## Interface: 16001
+## Title: |cfff07d30Forged|r Forever Auction House
+## Notes: Adds features from Forged Auction House (aux) to Blizzard's auction house window.
+## Author: Chromag
+## Version: 0.1.0
+## Category: Auction
+## SavedVariables: ForgedForeverAuctionHouseDB
+
+Core.lua
+History.lua
+FullScan.lua
+Vendor.lua
+Disenchant.lua
+Tooltip.lua
+ValuePercent.lua
+PercentColumn.lua
+PercentColumn.xml

@@ -1,0 +1,12 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<!-- Cell of the experimental "%" column (PercentColumn.lua). Same size and
+	     font as Blizzard's text cells in the browse results. -->
+	<Frame name="ForgedForeverAHPercentCellTemplate" mixin="ForgedForeverAHPercentCellMixin" virtual="true">
+		<Size x="0" y="16"/>
+		<Layers>
+			<Layer level="BACKGROUND">
+				<FontString parentKey="Text" inherits="Number14FontWhite" justifyH="RIGHT" setAllPoints="true"/>
+			</Layer>
+		</Layers>
+	</Frame>
+</Ui>
