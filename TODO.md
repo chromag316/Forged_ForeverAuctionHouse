@@ -79,6 +79,9 @@
    Clicking a row takes you to Blizzard's buy panel for that item (the commodity or item
    buy view, as if you'd clicked it in Blizzard's browse results).
 
-## Later
+## 3. Deals list improvements
 
-- **Auto scan every 15 seconds** while the auction house is open.
+1. **Sort by clicking the column headers** in the Deals lists (Item, Buy at, Sell at /
+   Vendor pays / Disenchant, Profit, Return, Sold/day, …): click once for ascending,
+   again for descending, with Blizzard's sort arrow on the header. The headers are
+   Blizzard's AuctionHouseTableHeaderStringTemplate buttons, currently display only.

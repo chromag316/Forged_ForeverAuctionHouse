@@ -111,9 +111,31 @@ local function Summary()
         Count(tracked), Count(listed), Count(withSales), Ago(ns.Market.LastScan()))
 end
 
+-- The item's name, from (in order): the client's item info, the name stored
+-- with the market data (Market.lua), or the auction house's item key info
+-- (what Blizzard's Buy list uses). If none has it yet, the row shows
+-- "item:ID" and is redrawn when a name arrives (namesMissing).
+local namesMissing = false
+
 local function ItemName(r)
     local name, _, quality = GetItemInfo(r.link or r.itemID)
-    if not name then return "item:" .. tostring(r.itemID) end
+    if name then
+        if r.key and not r.link and not ns.Market.Name(r.key) then ns.Market.SetName(r.key, name, quality) end
+    elseif r.key then
+        name, quality = ns.Market.Name(r.key)
+        if not name then
+            local itemKey = ns.Market.ItemKey(r.key)
+            local info = itemKey and C_AuctionHouse.GetItemKeyInfo(itemKey) -- also requests it
+            if info and info.itemName then
+                name, quality = info.itemName, info.quality
+                ns.Market.SetName(r.key, name, quality)
+            end
+        end
+    end
+    if not name then
+        namesMissing = true
+        return "|cff808080item:" .. tostring(r.itemID) .. "|r"
+    end
     local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
     return (color and color.hex or "|cffffffff") .. name .. "|r"
 end
@@ -479,7 +501,7 @@ local function BuildPanel(frame)
     InitRow = function(row, element)
         if not rawget(row, "cells") then BuildRow(row) end -- first use of this row frame
         local r = element.r
-        row.data = r
+        row.data, row.element = r, element
         row.stripe:SetShown(element.i % 2 == 1)
         local icon = select(5, GetItemInfoInstant(r.itemID))
         row.icon:SetTexture(icon or 134400)
@@ -584,3 +606,29 @@ end)
 ns:On("BAG_UPDATE_DELAYED", function()
     if currentType == "sell" then StrategyTab.Refresh() end
 end)
+
+-- Names that arrive later: redraw the visible rows (not the whole list),
+-- at most a few times a second, only while a row is missing one.
+local redrawQueued = false
+function StrategyTab.RedrawNames()
+    redrawQueued = false
+    if not (panel and panel:IsShown() and namesMissing and InitRow) then return end
+    namesMissing = false
+    local scrollBox = panel.scrollBox
+    if scrollBox.ForEachFrame then
+        scrollBox:ForEachFrame(function(row)
+            local element = rawget(row, "element")
+            if element then InitRow(row, element) end
+        end)
+    else
+        DrawRows()
+    end
+end
+local function QueueRedraw()
+    if redrawQueued or not namesMissing then return end
+    redrawQueued = true
+    C_Timer.After(0.3, StrategyTab.RedrawNames)
+end
+ns:Listen("ITEM_NAMES", QueueRedraw)
+ns:On("ITEM_KEY_ITEM_INFO_RECEIVED", QueueRedraw)
+ns:On("GET_ITEM_INFO_RECEIVED", QueueRedraw)

@@ -107,7 +107,9 @@ Features so far:
     bags with the tabs above the list (styled and placed like Blizzard's Auctions/Bids tabs); hover a row for the item tooltip, click it to open the item in Blizzard's buy view
     (Sell from bags rows open Blizzard's sell view with the item in it). All suggestions are in one scrolling list
     with a scroll bar, like Blizzard's Buy list (mouse wheel or drag the bar). It refreshes
-    when opened and after each scan. The list looks like Blizzard's auction lists (same
+    when opened and after each scan. Item names are stored with the market data; an
+    item the client hasn't loaded yet shows as a gray `item:ID` until its name arrives,
+    then the row updates by itself. The list looks like Blizzard's auction lists (same
     border, background, column header buttons, row stripes and highlight).
     - The tab is added the way LibAHTab (used by Auctionator) does it, which avoids
       taint: it isn't added to Blizzard's tab list. With Auctionator installed, it's

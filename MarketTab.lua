@@ -50,7 +50,7 @@ function MarketTab.Find(text)
     local exact, partial = {}, {}
     for _, key in ipairs(ns.Market.Keys()) do
         local itemID = tonumber(key:match("^(%d+)"))
-        local name = itemID and GetItemInfo(itemID)
+        local name = itemID and (GetItemInfo(itemID) or ns.Market.Name(key))
         if name then
             local lower = name:lower()
             if lower == text then
