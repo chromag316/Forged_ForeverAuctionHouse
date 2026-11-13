@@ -109,7 +109,8 @@ function Strategy.Disenchant()
     return out
 end
 
--- Your auctionable bag items: { key, itemID, count, link }
+-- Your auctionable bag items: { key, itemID, count, link, bag, slot }
+-- (bag/slot: where the first stack is, for opening the sell view)
 local function BagItems()
     local groups, order = {}, {}
     local lastBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
@@ -121,7 +122,8 @@ local function BagItems()
                 if key then
                     local g = groups[key]
                     if not g then
-                        g = { key = key, itemID = info.itemID or ItemID(key), count = 0, link = info.hyperlink }
+                        g = { key = key, itemID = info.itemID or ItemID(key), count = 0, link = info.hyperlink,
+                              bag = bag, slot = slot }
                         groups[key] = g
                         order[#order + 1] = g
                     end
@@ -134,7 +136,23 @@ local function BagItems()
 end
 Strategy.BagItems = BagItems
 
--- { key, itemID, link, count, price, proceeds, high, rising, value }
+-- Where an item with this key is in your bags now: bag, slot (the given
+-- slot if it still holds it, else the first match), or nil.
+function Strategy.FindInBags(key, bag, slot)
+    local function holds(b, sl)
+        local link = C_Container.GetContainerItemLink(b, sl)
+        return link and ns.History.KeyFromLink(link) == key
+    end
+    if bag and slot and holds(bag, slot) then return bag, slot end
+    local lastBag = NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4
+    for b = 0, lastBag do
+        for sl = 1, C_Container.GetContainerNumSlots(b) or 0 do
+            if holds(b, sl) then return b, sl end
+        end
+    end
+end
+
+-- { key, itemID, link, count, bag, slot, price, proceeds, high, rising, value }
 function Strategy.Sell()
     local out = {}
     for _, item in ipairs(BagItems()) do
@@ -148,6 +166,7 @@ function Strategy.Sell()
         if price then
             out[#out + 1] = {
                 key = item.key, itemID = item.itemID, link = item.link, count = item.count,
+                bag = item.bag, slot = item.slot,
                 price = price, proceeds = Net(price) * item.count, value = s.value,
                 high = s.value and s.listed and s.price and s.price >= s.value * HIGH_MARKET or false,
                 rising = s.trend and s.trend >= RISING_TREND or false,

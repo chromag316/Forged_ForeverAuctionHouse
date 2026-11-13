@@ -73,14 +73,11 @@
      default look.
    - The item is picked with a search box in the tab (only).
 
-4. **Deals list: click an item to buy it.** IN TEST (`StrategyTab.OpenInBuyView`, calls
-   `AuctionHouseFrame:SelectBrowseResult`; roll back to `v0.2.0` if buying gets blocked). Clicking a row in the Deals list takes you
-   to Blizzard's buy panel for that item (the commodity or item buy view, as if you'd
-   clicked it in Blizzard's browse results).
-   - Risk to check first: opening Blizzard's buy view from addon code means calling
-     Blizzard's frame code, which can taint the buy path and block the purchase
-     ("Interface action failed because of an AddOn"). Look at how Auctionator does
-     this on Forever before building it, and test buying right after a click.
+4. ~~**Deals list: click an item to buy it.**~~ Done and confirmed in game (buying works).
+   `StrategyTab.OpenInBuyView` calls `AuctionHouseFrame:SelectBrowseResult`; Sell from bags
+   rows open Blizzard's sell view instead (`OpenInSellView`, `AuctionHouseFrame:SetPostItem`).
+   Clicking a row takes you to Blizzard's buy panel for that item (the commodity or item
+   buy view, as if you'd clicked it in Blizzard's browse results).
 
 ## Later
 

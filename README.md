@@ -105,7 +105,7 @@ Features so far:
     (items tracked, listed, with sales data, time of the last full scan) shows in the
     window's bottom bar, and the panel shows the suggestions as a list: pick Resale, Vendor, Disenchant or Sell from
     bags with the tabs above the list (styled and placed like Blizzard's Auctions/Bids tabs); hover a row for the item tooltip, click it to open the item in Blizzard's buy view
-    (experimental). All suggestions are in one scrolling list
+    (Sell from bags rows open Blizzard's sell view with the item in it). All suggestions are in one scrolling list
     with a scroll bar, like Blizzard's Buy list (mouse wheel or drag the bar). It refreshes
     when opened and after each scan. The list looks like Blizzard's auction lists (same
     border, background, column header buttons, row stripes and highlight).

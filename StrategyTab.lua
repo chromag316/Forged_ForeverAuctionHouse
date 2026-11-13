@@ -188,6 +188,23 @@ function StrategyTab.OpenInBuyView(r)
     frame:SelectBrowseResult({ itemKey = itemKey, minPrice = price, totalQuantity = 0 })
 end
 
+-- Sell from bags rows open Blizzard's sell view with the item in it, the
+-- same as right-clicking it in your bags at the auction house:
+-- AuctionHouseFrame:SetPostItem(itemLocation), which picks the item or
+-- commodity sell view.
+function StrategyTab.OpenInSellView(r)
+    local frame = AuctionHouseFrame
+    if not frame or not frame.SetPostItem or not r.key then return end
+    local bag, slot = ns.Strategy.FindInBags(r.key, r.bag, r.slot)
+    if not bag then
+        ns:Print("That item isn't in your bags anymore.")
+        return
+    end
+    local location = ItemLocation:CreateFromBagAndSlot(bag, slot)
+    PlaySound(SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856)
+    frame:SetPostItem(location)
+end
+
 function StrategyTab.SetType(t)
     currentType, resetScroll = t, true
     StrategyTab.Refresh()
@@ -450,7 +467,12 @@ local function BuildPanel(frame)
         end)
         row:SetScript("OnLeave", GameTooltip_Hide)
         row:SetScript("OnClick", function(self)
-            if self.data then StrategyTab.OpenInBuyView(self.data) end
+            if not self.data then return end
+            if currentType == "sell" then
+                StrategyTab.OpenInSellView(self.data)
+            else
+                StrategyTab.OpenInBuyView(self.data)
+            end
         end)
     end
 
