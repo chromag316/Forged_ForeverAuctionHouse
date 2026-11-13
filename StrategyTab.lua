@@ -112,33 +112,49 @@ local function Summary()
         Count(tracked), Count(listed), Count(withSales), Ago(ns.Market.LastScan()))
 end
 
--- The item's name, from (in order): the client's item info, the name stored
--- with the market data (Market.lua), or the auction house's item key info
--- (what Blizzard's Buy list uses). If none has it yet, the row shows
--- "item:ID" and is redrawn when a name arrives (namesMissing).
+-- The item's name as Blizzard's Buy list shows it: the auction house's item
+-- key info name (with the random suffix: "Birchwood Maul of the Eagle") and,
+-- for gear, the level, via Blizzard's AuctionHouseUtil, for the item key the
+-- row opens. Until that's loaded: the name stored with the market data
+-- (Market.lua), else the client's item info (for suffixed items only the
+-- base name). Sell from bags rows use the item's link, which has the full
+-- name. With no name or only the base name, the row is redrawn when more
+-- arrives (namesMissing); with nothing at all it shows "item:ID".
 local namesMissing = false
 
--- name, quality (nil if not loaded yet)
+-- name, quality, display text (nil if not loaded yet)
 local function ResolveName(r)
-    local name, _, quality = GetItemInfo(r.link or r.itemID)
-    if name then
-        if r.key and not r.link and not ns.Market.Name(r.key) then ns.Market.SetName(r.key, name, quality) end
-    elseif r.key then
-        name, quality = ns.Market.Name(r.key)
-        if not name then
-            local itemKey = ns.Market.ItemKey(r.key)
-            local info = itemKey and C_AuctionHouse.GetItemKeyInfo(itemKey) -- also requests it
-            if info and info.itemName then
-                name, quality = info.itemName, info.quality
-                ns.Market.SetName(r.key, name, quality)
-            end
-        end
+    if r.link then
+        local name, _, quality = GetItemInfo(r.link)
+        return name, quality
     end
-    return name, quality
+    if not r.key then
+        local name, _, quality = GetItemInfo(r.itemID)
+        return name, quality
+    end
+    local itemKey = ns.Market.ItemKey(r.key)
+    local info = itemKey and C_AuctionHouse.GetItemKeyInfo(itemKey) -- also requests it
+    if info and info.itemName then
+        ns.Market.SetName(r.key, info.itemName, info.quality, true)
+        local util = AuctionHouseUtil
+        local display = util and util.GetItemDisplayTextFromItemKey
+            and util.GetItemDisplayTextFromItemKey(itemKey, info)
+        return info.itemName, info.quality, display
+    end
+    local name, quality = ns.Market.Name(r.key)
+    if name then return name, quality end
+    local base, _, baseQuality = GetItemInfo(r.itemID)
+    if base and not ns.Market.Suffixed(r.key) then
+        ns.Market.SetName(r.key, base, baseQuality)
+        return base, baseQuality
+    end
+    namesMissing = true -- suffixed: the full name is still to come
+    return base, baseQuality
 end
 
 local function ItemName(r)
-    local name, quality = ResolveName(r)
+    local name, quality, display = ResolveName(r)
+    if display then return display end
     if not name then
         namesMissing = true
         return "|cff808080item:" .. tostring(r.itemID) .. "|r"

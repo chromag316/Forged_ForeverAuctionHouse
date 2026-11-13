@@ -17,7 +17,7 @@ local _, ns = ...
 --     items = { ["itemID:suffix"] = {
 --         s = { { t, price, quantity }, ... },  -- snapshots, oldest first
 --         lvl = itemLevel,                      -- for the item key (gear)
---         n = name, nq = quality,               -- item name (see Item names)
+--         n = name, nq = quality, nk = true?    -- item name (see Item names)
 --         d = { { day, min, max, avgQty, sold }, ... }, -- daily summaries
 --     } },
 --   }
@@ -421,52 +421,82 @@ end
 -- from the server (the call starts the load). Names are stored with the
 -- market data (item.n, quality item.nq) so lists and the Market tab's
 -- search have them right away, also for items not loaded this session.
--- Missing ones are requested after each scan and at login, and stored when
--- GET_ITEM_INFO_RECEIVED / ITEM_DATA_LOAD_RESULT arrives; the internal
--- message ITEM_NAMES then tells the lists to redraw (throttled).
+--
+-- Items with a random suffix ("of the Eagle", "of the Boar", ...) share an
+-- item ID, and C_Item.GetItemInfo(itemID) only knows the base name. Their
+-- full name comes from the auction house's item key info, as in Blizzard's
+-- lists; it's stored with item.nk = true, and a base name is never stored
+-- (or returned) for them.
+--
+-- Missing names are requested after each scan and at login, and stored when
+-- GET_ITEM_INFO_RECEIVED / ITEM_DATA_LOAD_RESULT / ITEM_KEY_ITEM_INFO_RECEIVED
+-- arrives; the internal message ITEM_NAMES then tells the lists to redraw
+-- (throttled).
 
 local GetItemInfo = (C_Item and C_Item.GetItemInfo) or _G.GetItemInfo
 
 local waiting = {} -- [itemID] = true: requested, name not stored yet
 
--- name, quality, or nil
+local function Suffixed(key)
+    return not key:match(":0$")
+end
+Market.Suffixed = Suffixed
+
+-- name, quality, or nil (for suffixed items only the full name)
 function Market.Name(key)
     local item = data and data.items[key]
-    if item and item.n then return item.n, item.nq end
+    if item and item.n and (item.nk or not Suffixed(key)) then return item.n, item.nq end
 end
 
-function Market.SetName(key, name, quality)
+-- fromKeyInfo: the name is the auction house's item key info name (full,
+-- with the suffix).
+function Market.SetName(key, name, quality, fromKeyInfo)
     local item = data and data.items[key]
-    if item and name and name ~= "" then item.n, item.nq = name, quality end
+    if not (item and name and name ~= "") then return end
+    if Suffixed(key) and not fromKeyInfo then return end
+    item.n, item.nq, item.nk = name, quality, fromKeyInfo or nil
+end
+
+-- Tries to store a key's name; true if it has one.
+local function Learn(key, item)
+    if Market.Name(key) then return true end
+    local itemID = tonumber(key:match("^(%d+)"))
+    if not itemID then return true end
+    if Suffixed(key) then
+        local itemKey = Market.ItemKey(key)
+        local info = itemKey and C_AuctionHouse.GetItemKeyInfo(itemKey) -- also requests it
+        if info and info.itemName then
+            Market.SetName(key, info.itemName, info.quality, true)
+            return true
+        end
+    else
+        local name, _, quality = GetItemInfo(itemID) -- also requests the load
+        if name then
+            Market.SetName(key, name, quality)
+            return true
+        end
+    end
+    waiting[itemID] = true
 end
 
 -- Stores every loaded name; requests the rest.
 function Market.LearnNames()
     if not data then return end
-    for key, item in pairs(data.items) do
-        if not item.n then
-            local itemID = tonumber(key:match("^(%d+)"))
-            local name, _, quality = GetItemInfo(itemID) -- also requests the load
-            if name then
-                item.n, item.nq = name, quality
-            elseif itemID then
-                waiting[itemID] = true
-            end
-        end
-    end
+    for key, item in pairs(data.items) do Learn(key, item) end
 end
 
 local namesPending = false
 local function NameArrived(itemID)
     if not (itemID and waiting[itemID] and data) then return end
-    local name, _, quality = GetItemInfo(itemID)
-    if not name then return end
     waiting[itemID] = nil
     local prefix = itemID .. ":"
+    local learned = false
     for key, item in pairs(data.items) do
-        if not item.n and key:sub(1, #prefix) == prefix then item.n, item.nq = name, quality end
+        if key:sub(1, #prefix) == prefix and not Market.Name(key) then
+            learned = Learn(key, item) or learned -- re-adds waiting if still missing
+        end
     end
-    if not namesPending then
+    if learned and not namesPending then
         namesPending = true
         C_Timer.After(0.3, function()
             namesPending = false
@@ -476,6 +506,7 @@ local function NameArrived(itemID)
 end
 ns:On("GET_ITEM_INFO_RECEIVED", NameArrived)
 ns:On("ITEM_DATA_LOAD_RESULT", NameArrived)
+ns:On("ITEM_KEY_ITEM_INFO_RECEIVED", NameArrived)
 
 ns:Listen("LOGIN", function()
     C_Timer.After(5, Market.LearnNames)

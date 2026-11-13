@@ -50,7 +50,8 @@ function MarketTab.Find(text)
     local exact, partial = {}, {}
     for _, key in ipairs(ns.Market.Keys()) do
         local itemID = tonumber(key:match("^(%d+)"))
-        local name = itemID and (GetItemInfo(itemID) or ns.Market.Name(key))
+        -- Suffixed items ("of the Eagle"): only their full stored name.
+        local name = itemID and (ns.Market.Name(key) or (not ns.Market.Suffixed(key) and GetItemInfo(itemID)) or nil)
         if name then
             local lower = name:lower()
             if lower == text then
@@ -221,6 +222,10 @@ function MarketTab.Show(key)
     panel.graph:Show()
     local itemID = tonumber(key:match("^(%d+)"))
     local name, link, quality = GetItemInfo(itemID)
+    local stored, storedQuality = ns.Market.Name(key)
+    if stored then
+        name, quality = stored, storedQuality or quality -- full name with a random suffix
+    end
     local color = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[quality]
     panel.item.icon:SetTexture(select(5, GetItemInfoInstant(itemID)) or 134400)
     panel.item.name:SetText((color and color.hex or "|cffffffff") .. (name or ("item:" .. itemID)) .. "|r")

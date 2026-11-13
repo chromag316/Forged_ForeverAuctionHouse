@@ -116,7 +116,9 @@ Features so far:
     it doesn't ask the server). A row's tooltip says how old its price is ("Price from
     scan 6 min ago" or "Price checked just now"). Item names are stored with the market data; an
     item the client hasn't loaded yet shows as a gray `item:ID` until its name arrives,
-    then the row updates by itself. Click a column header to sort by it (once
+    then the row updates by itself. Names are shown as in Blizzard's Buy list: items
+    with a random suffix have their full name ("Birchwood Maul of the Eagle"), gear has
+    its level, so each variant is its own row with its own name. Click a column header to sort by it (once
     ascending, again descending, with Blizzard's sort arrow); rows without a value go
     last, and each list (Resale, Vendor, …) keeps its own sort until you reload. The
     lists start in the strategy engine's ranking. The list looks like Blizzard's auction lists (same
