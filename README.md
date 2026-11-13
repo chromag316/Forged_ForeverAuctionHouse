@@ -29,10 +29,28 @@ Features so far:
 - **Full Scan**: a button at the bottom right of Blizzard's Buy view. It searches the
   whole auction house (an empty search) and loads every page as fast as the server's
   rate limit allows. Price history records every item's lowest price, and the pages
-  show up in Blizzard's results list as they arrive. Progress is shown next to the
-  button, and a summary is printed in chat when it ends.
+  show up in Blizzard's results list as they arrive. Progress is shown at the bottom,
+  right after your money, and the end message is also printed in chat.
+  - While starting: `Rate limited. Waiting before starting...` (the server's rate
+    limit isn't ready yet), then `Waiting for server response...` until the first page.
+  - Progress: `Scanning... (1,180 of ~1,830 items)`. The total is an estimate from the
+    last completed scan on this realm and faction (the server doesn't say how many items
+    a search returns); before the first completed scan it shows
+    `Scanning... (1,180 items)`.
+  - End messages: `Scan complete: 4,210 items (95s)` (auto scan),
+    `Full scan complete: 4,210 items (95s)`, `Stopped by user: 1,180 items (30s)`,
+    `Stopped: New search started`, `Stopped: Left the Buy view`,
+    `Stopped: Server timeout`, `Stopped: Server error`.
   - It stops when the list is complete, when you click **Stop Scan**, open an item,
     start your own search or change tabs, or when the auction house closes.
+  - **Auto scan**: a scan also starts by itself shortly after the auction house opens
+    on the Buy view. Opening an item or going to Sell or Auctions pauses it, and it
+    starts over when you're back on the Buy view (prices already recorded are kept).
+    Your own search, Stop, a server error or timeout, or one completed auto scan end
+    auto scanning until you open the auction house again.
+  - The **Auto scan** checkbox left of the Full Scan button turns it on or off (on by
+    default, saved). Turning it on takes effect the next time you open the auction
+    house; turning it off also stops a running auto scan.
   - A scan only gives the lowest price per item, not every auction. Forever's
     `ReplicateItems` ("get all") does nothing, so a paged search is the only way.
 - **Tooltip lines**: price lines on every item tooltip: label on the left, price on
@@ -67,6 +85,45 @@ Features so far:
     Off by default: it writes into Blizzard's own table and results, which can make the
     client block buying ("Interface action failed because of an AddOn"). If buying
     fails, turn it off again with `/fah percent column` and `/reload`.
+
+- **Strategy engine**: market statistics and profitable suggestions from your scans.
+  - Every scan stores, per item, the lowest price and quantity available (only when
+    something changed). After a completed scan, items that disappeared get quantity 0.
+    Detail is kept for 3 days, then folded into daily summaries kept for 30 days.
+  - Per item it works out the current price and quantity, the market value, estimated
+    sales per day (quantity drops between scans; at least 6 hours of data), the price
+    trend (last 24 hours vs. the two days before) and volatility.
+  - Suggestions, all after the 5% auction house cut (the deposit is refunded when an
+    auction sells, so it's only a cost for listings that don't):
+    - **Resale**: listed at least 10% below what relisting at market value earns, and
+      selling at least every two days; ranked by expected profit per day.
+    - **Vendor**: listed below what a vendor pays.
+    - **Disenchant**: gear listed below its expected disenchant value.
+    - **Sell from bags**: your items with a price just under the lowest listing (or the
+      market value), expected proceeds, and whether the market is high or rising.
+  - **Deals tab**: a "Deals" tab after Blizzard's Buy/Sell/Auctions tabs. A market summary
+    (items tracked, listed, with sales data, time of the last full scan) shows in the
+    window's bottom bar, and the panel shows the suggestions as a list: pick Resale, Vendor, Disenchant or Sell from
+    bags with the tabs above the list (styled and placed like Blizzard's Auctions/Bids tabs); hover a row for the item tooltip. All suggestions are in one scrolling list
+    with a scroll bar, like Blizzard's Buy list (mouse wheel or drag the bar). It refreshes
+    when opened and after each scan. The list looks like Blizzard's auction lists (same
+    border, background, column header buttons, row stripes and highlight).
+    - The tab is added the way LibAHTab (used by Auctionator) does it, which avoids
+      taint: it isn't added to Blizzard's tab list. With Auctionator installed, it's
+      created through LibAHTab so the tabs line up.
+  - `/fah strategy` prints the top 5 of each in chat; `/fah strategy
+    resale|vendor|disenchant|sell` one kind.
+- **Market tab**: a "Market" tab after Deals. Search for an item (the search box is the
+  only way to pick one; with several matches, click one in the list). It shows:
+  - the lowest price now and how many are listed, the market value and today's lowest;
+  - volatility, sales velocity (estimated sold per day), the 24-hour trend and how many
+    days of data there are;
+  - a 30-day graph: daily lowest price (gold), daily highest (gray), the market value
+    (blue) and estimated sales per day (gray bars), with price and day labels.
+  - Only items a scan has seen can be found. The graph uses the daily summaries for
+    older days and the scan detail for the last 3; between changes the last price
+    carries over.
+  - Added the same taint-free way as the Deals tab (`Tabs.lua`).
 
 ## Development notes
 
