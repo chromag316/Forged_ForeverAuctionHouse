@@ -143,6 +143,9 @@ sellList.Background = sellBg
 local sellNS = newFrame("Frame"); sellNS.GetRight = function() return 770 end; sellNS.GetBottom = function() return 27 end
 sellList.NineSlice = sellNS
 AuctionHouseFrame.ItemSellList = sellList
+-- the Buy view's search box (SearchBar.SearchBox)
+local blizzSearchBox = newFrame("EditBox")
+AuctionHouseFrame.SearchBar = { SearchBox = blizzSearchBox }
 
 local ns = {}
 for _, f in ipairs({"Core.lua", "History.lua", "Market.lua", "OrderBook.lua", "Disenchant.lua", "Strategy.lua", "Tabs.lua", "StrategyTab.lua", "MarketTab.lua"}) do
@@ -341,7 +344,9 @@ eq(R.points[1][2], sellList, "right panel on ItemSellList"); eq(R.points[1][1], 
 eq(R.points[2][2], sellList, "right panel BOTTOMRIGHT on ItemSellList"); eq(R.points[2][1], "BOTTOMRIGHT", "right BOTTOMRIGHT")
 eq(R.bg.points[1][2], sellBg, "right background on Blizzard's background"); eq(R.border.points[1][2], sellNS, "right border on Blizzard's border")
 eq(L.points[1][1] ~= nil, true, "left anchored")
-eq(L.tab.label.text, "Item Statistics", "tab label")
+eq(rawget(L, "tab"), nil, "no tab above the left panel")
+eq(mpanel.search.points[1][1], "TOPLEFT", "search box TOPLEFT"); eq(mpanel.search.points[1][2], blizzSearchBox, "on the Buy view's search box")
+eq(mpanel.search.points[2][1], "BOTTOMRIGHT", "search box BOTTOMRIGHT"); eq(mpanel.search.points[2][2], blizzSearchBox, "same size")
 eq(R.header.text, "Price History (30 days)", "right header")
 eq(mpanel.left.display.name.text, "|cffffffffCloth|r", "item name")
 eq(mpanel.left.rows.price.value.text, "9c (35 listed)", "lowest now row")
@@ -349,6 +354,12 @@ eq(mpanel.left.rows.price.label.text, "Lowest now", "row label")
 eq(mpanel.left.rows.sales.value.text:find("sold/day", 1, true) ~= nil, true, "sales row: " .. tostring(mpanel.left.rows.sales.value.text))
 eq(mpanel.graph.plot.shown, true, "graph shown")
 eq(mpanel.graph.empty.shown, false, "graph has data")
+local dayLabels = {}
+for _, l in ipairs(mpanel.graph.labels) do if l.text then dayLabels[l.text] = l end end
+eq(dayLabels["30 days ago"] and dayLabels["30 days ago"].points[1][1], "TOPLEFT", "first day label starts at the left edge")
+eq(dayLabels["30 days ago"] and dayLabels["30 days ago"].points[1][4], 0, "at x 0")
+eq(dayLabels["today"] and dayLabels["today"].points[1][1], "TOPRIGHT", "last day label ends at the right edge")
+eq(dayLabels["15 days ago"] and dayLabels["15 days ago"].points[1][1], "TOP", "middle label centered")
 eq((rawget(mpanel.graph.plot, "linesMade") or 0) > 5, true, "graph lines drawn: " .. tostring(rawget(mpanel.graph.plot, "linesMade")))
 M.Search("nothing here")
 eq(mpanel.left.content.shown, false, "no match hides the item")

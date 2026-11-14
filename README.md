@@ -126,8 +126,8 @@ Features so far:
     resale|vendor|disenchant|sell` one kind.
 - **Market tab**: a "Market" tab after Deals, laid out like Blizzard's Sell view (its
   panels, backgrounds and borders sit exactly on the Sell view's). Search for an item
-  with the box next to the "Item Statistics" tab (the only way to pick one; with
-  several matches, click one in the list).
+  with the search box, which is where the Buy view has its own (the only way to pick
+  one; with several matches, click one in the list).
   - Left panel (where the Sell view has its item and price inputs): the item, then rows
     with the lowest price now and how many are listed, the market value, today's
     lowest, volatility, sales velocity (estimated sold per day), the 24-hour trend, how

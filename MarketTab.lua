@@ -141,11 +141,14 @@ local function DrawGraph(key)
         label:SetPoint("RIGHT", plot, "BOTTOMLEFT", -6, y)
         label:SetText(Money(price))
     end
-    -- Day labels
-    for _, mark in ipairs({ { 1, DAYS .. " days ago" }, { 16, "15 days ago" }, { DAYS, "today" } }) do
+    -- Day labels: the first starts at the graph's left edge and the last
+    -- ends at its right edge (centered, they'd run into the price labels and
+    -- past the border); the middle one is centered on its day.
+    for _, mark in ipairs({ { 1, DAYS .. " days ago", "TOPLEFT" }, { 16, "15 days ago", "TOP" },
+                            { DAYS, "today", "TOPRIGHT" } }) do
         local label = nextLabel()
         label:ClearAllPoints()
-        label:SetPoint("TOP", plot, "BOTTOMLEFT", X(mark[1]), -4)
+        label:SetPoint(mark[3], plot, "BOTTOMLEFT", X(mark[1]), -4)
         label:SetText(mark[2])
     end
 
@@ -379,8 +382,8 @@ MarketTab.Search = Search
 -- Panel: the Sell view's layout (Blizzard_AuctionHouseFrame.xml, branch
 -- forever). Left like ItemSellFrame (AuctionHouseSellFrameTemplate: 363
 -- wide, from 69 below the window's top to 2 above the money display, 4 in;
--- "auctionhouse-background-sell-left", a "Create Auction"-style tab above
--- it, the item display at the top). Right like ItemSellList
+-- "auctionhouse-background-sell-left", the item display at the top; no
+-- tab above it). The search box is where the Buy view's is. Right like ItemSellList
 -- (AuctionHouseItemListTemplate: 1 right of the left panel to 5 from the
 -- window's right; header row, "auctionhouse-background-sell-right" from 19
 -- down, refresh button at (-4, +30)).
@@ -437,25 +440,6 @@ local function BuildLeft(frame)
     local border = Border(left)
     Copy(border, blizz and blizz.NineSlice, function() border:SetAllPoints() end)
     left.bg, left.border = bg, border
-
-    -- Tab above the panel, drawn like Blizzard's "Create Auction" tab.
-    local tabLeft = left:CreateTexture(nil, "BACKGROUND")
-    tabLeft:SetAtlas("auctionhouse-selltab-left", true)
-    tabLeft:SetPoint("BOTTOMLEFT", left, "TOPLEFT", 42, -3)
-    local tabLabel = left:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-    tabLabel:SetJustifyH("LEFT")
-    tabLabel:SetPoint("LEFT", tabLeft, "RIGHT", 12, 0)
-    tabLabel:SetText("Item Statistics")
-    local tabMiddle = left:CreateTexture(nil, "BACKGROUND")
-    tabMiddle:SetAtlas("auctionhouse-selltab-middle")
-    tabMiddle:SetHeight(23)
-    tabMiddle:SetPoint("TOPLEFT", tabLeft, "TOPRIGHT")
-    tabMiddle:SetPoint("RIGHT", tabLabel, "RIGHT", 12, 0)
-    local tabRight = left:CreateTexture(nil, "BACKGROUND")
-    tabRight:SetAtlas("auctionhouse-selltab-right", true)
-    tabRight:SetPoint("TOPLEFT", tabMiddle, "TOPRIGHT")
-    tabRight:SetPoint("BOTTOMLEFT", tabMiddle, "BOTTOMRIGHT")
-    left.tab = { left = tabLeft, middle = tabMiddle, right = tabRight, label = tabLabel }
 
     -- Everything shown for an item.
     local content = CreateFrame("Frame", nil, left)
@@ -621,10 +605,15 @@ local function BuildPanel(frame)
     panel.left = BuildLeft(frame)
     panel.graph = BuildRight(frame, panel.left)
 
-    -- Search box right of the tab above the left panel, level with it.
+    -- Search box exactly where the Buy view's is: on Blizzard's own search
+    -- box (SearchBar.SearchBox; anchoring only reads its position). Without
+    -- it, its position measured from the Buy view.
     local search = CreateFrame("EditBox", nil, panel, "SearchBoxTemplate")
-    search:SetSize(240, 20)
-    search:SetPoint("LEFT", panel.left.tab.right, "RIGHT", 20, -1)
+    local blizzSearch = type(frame.SearchBar) == "table" and frame.SearchBar.SearchBox
+    Copy(search, type(blizzSearch) == "table" and blizzSearch or nil, function()
+        search:SetPoint("TOPLEFT", frame, "TOPLEFT", 208, -40)
+        search:SetSize(245, 20)
+    end)
     search:SetAutoFocus(false)
     search:SetScript("OnEnterPressed", function(self)
         self:ClearFocus()
