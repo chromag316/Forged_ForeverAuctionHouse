@@ -95,6 +95,16 @@ local keyInfoLoaded = true
 C_AuctionHouse = { GetBrowseResults = function() return {} end,
   MakeItemKey = function(id, lvl, suf) return { itemID = id, itemLevel = lvl or 0, itemSuffix = suf or 0 } end,
   GetItemKeyInfo = function() if keyInfoLoaded then return { isCommodity = true } end end }
+-- item searches (order book)
+local sentQueries, commodityResults, throttleReady = {}, {}, true
+C_AuctionHouse.IsThrottledMessageSystemReady = function() return throttleReady end
+C_AuctionHouse.SendSearchQuery = function(itemKey, sorts, separate) sentQueries[#sentQueries + 1] = { itemKey = itemKey, sorts = sorts, separate = separate } end
+C_AuctionHouse.GetNumCommoditySearchResults = function() return #commodityResults end
+C_AuctionHouse.GetCommoditySearchResultInfo = function(_, i) return commodityResults[i] end
+C_AuctionHouse.HasFullCommoditySearchResults = function() return true end
+C_AuctionHouse.GetCommoditySearchResultsQuantity = function() local q = 0 for _, r in ipairs(commodityResults) do q = q + r.quantity end return q end
+Enum = Enum or {}
+Enum.AuctionHouseSortOrder = { Price = 0 }
 -- bag 0: Cloth x20 in slot 3
 local bagSlots = { [3] = { itemID = 100, hyperlink = "|Hitem:100::|h[Cloth]|h", stackCount = 20 } }
 C_Container = {
@@ -135,7 +145,7 @@ sellList.NineSlice = sellNS
 AuctionHouseFrame.ItemSellList = sellList
 
 local ns = {}
-for _, f in ipairs({"Core.lua", "History.lua", "Market.lua", "Disenchant.lua", "Strategy.lua", "Tabs.lua", "StrategyTab.lua", "MarketTab.lua"}) do
+for _, f in ipairs({"Core.lua", "History.lua", "Market.lua", "OrderBook.lua", "Disenchant.lua", "Strategy.lua", "Tabs.lua", "StrategyTab.lua", "MarketTab.lua"}) do
   assert(loadfile(DIR .. "/" .. f))("Forged_ForeverAuctionHouse", ns)
 end
 local eventFrame = created[1]
@@ -329,4 +339,70 @@ eq((rawget(mpanel.graph.plot, "linesMade") or 0) > 5, true, "graph lines drawn: 
 M.Search("nothing here")
 eq(mpanel.item.shown, false, "no match hides the item")
 eq(mpanel.hint.text:find("No tracked item matches", 1, true) ~= nil, true, "no-match hint")
+-- order book: statistics
+local OB = ns.OrderBook
+local levels, loaded = OB.Levels({ { 16, 93 }, { 15, 60 }, { 15, 44 }, { 17, 4 }, { 0, 5 }, { 20, 0 }, { 133, 20 } })
+eq(#levels, 4, "levels merged by price, empty/zero dropped"); eq(levels[1][1], 15, "cheapest first"); eq(levels[1][2], 104, "same price summed")
+eq(loaded, 221, "loaded quantity")
+local book = { levels = levels, loaded = loaded }
+local total, each = OB.CostToBuy(book, 20)
+eq(total, 300, "buy 20 from the first level"); eq(each, 15, "average")
+total, each = OB.CostToBuy(book, 110)
+eq(total, 104 * 15 + 6 * 16, "buy 110 spans two levels")
+total, each = OB.CostToBuy(book, 500)
+eq(total, nil, "not enough listed"); eq(each, 221, "how many are")
+local q, cost = OB.BelowValue(book, 17)
+eq(q, 197, "below value 17: 15c and 16c levels"); eq(cost, 104 * 15 + 93 * 16, "their cost")
+eq(OB.BelowValue(book, nil), 0, "no value: none")
+eq(OB.BelowValue(book, 10), 0, "nothing below")
+local wp, wq = OB.Wall(book)
+eq(wp, 15, "wall: first level with 10%+"); eq(wq, 104, "wall quantity")
+eq(OB.Wall({ levels = { { 5, 1 }, { 6, 2 } }, loaded = 3 }), nil, "no wall with little listed")
+eq(OB.Wall({ levels = { { 5, 5 }, { 6, 15 }, { 7, 180 } }, loaded = 200 }), 7, "small levels skipped")
+
+-- order book: Market tab requests the item's search and shows the lines
+AuctionHouseFrame.shown = true
+mtab.scripts.OnClick()
+now = now + 120 -- past the earlier test's "no answer" minute
+local before = #sentQueries
+M.Search("Cloth")
+eq(#sentQueries, before + 1, "item search sent")
+local q1 = sentQueries[#sentQueries]
+eq(q1.itemKey.itemID, 100, "for the shown item"); eq(q1.sorts[1].sortOrder, 0, "sorted by price"); eq(q1.separate, true, "own items separate")
+-- (C_Timer runs at once here, so the 15 s timeout has already passed)
+eq(mpanel.item.book.text:find("no answer", 1, true) ~= nil, true, "no answer: " .. tostring(mpanel.item.book.text))
+M.Show("100:0")
+eq(#sentQueries, before + 1, "not re-sent right after no answer")
+commodityResults = { { unitPrice = 9, quantity = 30 }, { unitPrice = 10, quantity = 5 }, { unitPrice = 40, quantity = 200 } }
+fire("COMMODITY_SEARCH_RESULTS_UPDATED", 100)
+local bookLine, depthLine = mpanel.item.book.text, mpanel.item.depth.text
+eq(bookLine:find("Buy 20: 180c (9c each)", 1, true) ~= nil, true, "buy 20 line: " .. tostring(bookLine))
+eq(bookLine:find("Buy 200: 6920c (35c each)", 1, true) ~= nil, true, "buy 200 line: " .. tostring(bookLine))
+eq(bookLine:find("Buy 100: 2920c (29c each)", 1, true) ~= nil, true, "buy 100 line: " .. tostring(bookLine))
+eq(depthLine:find("Wall: 30 at 9c", 1, true) ~= nil, true, "wall: " .. tostring(depthLine))
+eq(depthLine:find("235 listed at 3 prices", 1, true) ~= nil, true, "listed: " .. tostring(depthLine))
+eq(depthLine:find("order book just now", 1, true) ~= nil, true, "age: " .. tostring(depthLine))
+M.Show("100:0")
+eq(#sentQueries, before + 1, "current book: no new search")
+-- throttled: waits, nothing sent
+-- throttled: waits for the rate limit (timers queued here), then sends once
+local queued = {}
+local realAfter = C_Timer.After
+C_Timer.After = function(_, fn) queued[#queued + 1] = fn end
+throttleReady = false
+now = now + 120
+M.Show("100:0")
+eq(#sentQueries, before + 1, "rate limited: not sent yet")
+eq(ns.OrderBook.IsLoading("100:0"), true, "waiting counts as loading")
+local function step() local q = queued; queued = {}; for _, fn in ipairs(q) do fn() end end
+step(); eq(#sentQueries, before + 1, "still limited")
+throttleReady = true
+step(); eq(#sentQueries, before + 2, "sent once the rate limit is ready")
+M.Show("100:0"); eq(#sentQueries, before + 2, "no duplicate while loading")
+-- sold out: an empty, complete search
+now = now + 120; commodityResults = {}
+fire("COMMODITY_SEARCH_RESULTS_UPDATED", 100)
+eq(ns.OrderBook.Get("100:0") and #ns.OrderBook.Get("100:0").levels, 0, "sold out: empty book")
+eq(mpanel.item.book.text:find("nothing listed", 1, true) ~= nil, true, "empty book line: " .. tostring(mpanel.item.book.text))
+C_Timer.After = realAfter
 io.write(fails == 0 and "ALL PASS\n" or (fails .. " FAILURES\n"))

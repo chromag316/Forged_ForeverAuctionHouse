@@ -209,6 +209,9 @@ local function Pct(x, signed)
 end
 
 function MarketTab.Show(key)
+    -- The item's listings, for the order book lines (no-op while current,
+    -- loading, or shortly after the server didn't answer).
+    if key then ns.OrderBook.Request(key) end
     selectedKey = key
     panel.matches:Hide()
     if not key then
@@ -240,8 +243,56 @@ function MarketTab.Show(key)
         s.salesPerDay and ("~%.1f sold/day"):format(s.salesPerDay) or "---",
         Pct(s.trend, true),
         s.days and ("%.1f days"):format(s.days) or "---"))
+    local buy, depth = MarketTab.BookText(key, s.value)
+    panel.item.book:SetText(buy)
+    panel.item.depth:SetText(depth)
     DrawGraph(key)
 end
+
+-- The order book lines (OrderBook.lua): cost to buy N; then units below
+-- market value, the wall and the book's age. Commodities: 20 / 100 / 200
+-- units; other items (mostly single auctions): 1 / 5 / 20.
+function MarketTab.BookText(key, value)
+    local OB = ns.OrderBook
+    local book = OB.Get(key)
+    if not book then
+        if OB.IsLoading(key) then return "Order book: loading...", "" end
+        if OB.Failed(key) then return "Order book: no answer from the server; try again in a minute.", "" end
+        return "Order book: not loaded (needs the item's search; not while a scan runs).", ""
+    end
+    if #book.levels == 0 then return "Order book: nothing listed with a buyout.", "" end
+    local parts = {}
+    for _, n in ipairs(book.commodity and { 20, 100, 200 } or { 1, 5, 20 }) do
+        local total, each = OB.CostToBuy(book, n)
+        if total then
+            parts[#parts + 1] = ("Buy %d: %s (%s each)"):format(n, Money(total), Money(math.floor(each + .5)))
+        else
+            parts[#parts + 1] = ("Buy %d: only %s listed"):format(n, Count(each))
+            break
+        end
+    end
+    local buyLine = table.concat(parts, "    ")
+    parts = {}
+    local below, cost = OB.BelowValue(book, value)
+    if value then
+        parts[#parts + 1] = below > 0 and ("Below value: %s for %s"):format(Count(below), Money(cost))
+            or "Below value: none"
+    end
+    local wallPrice, wallQuantity = OB.Wall(book)
+    if wallPrice then
+        parts[#parts + 1] = ("Wall: %s at %s"):format(Count(wallQuantity), Money(wallPrice))
+    end
+    local age = time() - book.t
+    local note = age < 60 and "just now" or (math.floor(age / 60) .. " min ago")
+    if not book.complete then note = note .. ", partly loaded" end
+    parts[#parts + 1] = ("%s listed at %d prices"):format(Count(book.total), #book.levels)
+    return buyLine, table.concat(parts, "    ") .. "    |cff808080(order book " .. note .. ")|r"
+end
+
+-- The shown item's order book changed (or its request ended): redraw.
+ns:Listen("ORDER_BOOK", function(key)
+    if panel and panel:IsShown() and key == selectedKey then MarketTab.Show(selectedKey) end
+end)
 
 local function ShowMatches(matches)
     local list = panel.matches
@@ -301,7 +352,7 @@ local function BuildPanel(frame)
     local item = CreateFrame("Button", nil, panel)
     item:SetPoint("TOPLEFT", 0, -30)
     item:SetPoint("RIGHT", panel, "RIGHT", 0, 0)
-    item:SetHeight(48)
+    item:SetHeight(76)
     item.icon = item:CreateTexture(nil, "ARTWORK")
     item.icon:SetSize(36, 36)
     item.icon:SetPoint("LEFT", 4, 0)
@@ -311,6 +362,10 @@ local function BuildPanel(frame)
     item.prices:SetPoint("TOPLEFT", item.name, "BOTTOMLEFT", 0, -4)
     item.stats = item:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     item.stats:SetPoint("TOPLEFT", item.prices, "BOTTOMLEFT", 0, -3)
+    item.book = item:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    item.book:SetPoint("TOPLEFT", item.stats, "BOTTOMLEFT", 0, -3)
+    item.depth = item:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    item.depth:SetPoint("TOPLEFT", item.book, "BOTTOMLEFT", 0, -3)
     item:SetScript("OnEnter", function(self)
         if not self.link then return end
         GameTooltip:SetOwner(self.icon, "ANCHOR_RIGHT")
@@ -323,7 +378,7 @@ local function BuildPanel(frame)
 
     -- Graph
     local graph = CreateFrame("Frame", nil, panel, "InsetFrameTemplate")
-    graph:SetPoint("TOPLEFT", 0, -84)
+    graph:SetPoint("TOPLEFT", 0, -112)
     graph:SetPoint("BOTTOMRIGHT", 0, 0)
     graph.plot = CreateFrame("Frame", nil, graph)
     graph.plot:SetPoint("TOPLEFT", 90, -24)

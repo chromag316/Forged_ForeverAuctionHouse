@@ -131,6 +131,17 @@ Features so far:
     days of data there are;
   - a 30-day graph: daily lowest price (gold), daily highest (gray), the market value
     (blue) and estimated sales per day (gray bars), with price and day labels.
+  - **Order book**: when an item is shown, the tab asks the server for its listings
+    (the same search Blizzard's buy view sends; waits for the rate limit, not while a
+    scan runs) and shows:
+    - the cost to buy 20 / 100 / 200 (other items: 1 / 5 / 20): total and per item,
+      or how many are listed if fewer;
+    - how many are listed below market value and what buying them all costs;
+    - the wall: the first price with at least 10% (and 20+) of the listed quantity,
+      where a new listing would end up;
+    - how many are listed at how many prices, and how old the order book is.
+    Opening the item in Blizzard's buy view updates it too. Gear: the item level the
+    lists use. Kept for the session only.
   - Only items a scan has seen can be found. The graph uses the daily summaries for
     older days and the scan detail for the last 3; between changes the last price
     carries over.

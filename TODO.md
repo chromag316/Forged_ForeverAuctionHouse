@@ -94,7 +94,8 @@ What a trader wants on top of today's lowest price, value, volatility, sales/day
 trend and graph: what it really costs to buy, how fast it really sells, and what's
 left after costs. In order; 1-4 mostly use data already collected.
 
-1. **Order book** (from the item's commodity/item search, read when it opens):
+1. ~~**Order book**~~ Done (`OrderBook.lua`; two lines in the Market tab; the tab
+   sends the item's search itself). From the item's commodity/item search:
    - cost to buy N (e.g. 20 / 100 / 200): total and average unit price;
    - units listed below market value, and what buying all of them costs;
    - the "wall": the first price level with a large quantity (where your own

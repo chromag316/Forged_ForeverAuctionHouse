@@ -9,6 +9,7 @@
 Core.lua
 History.lua
 Market.lua
+OrderBook.lua
 FullScan.lua
 Vendor.lua
 Disenchant.lua
