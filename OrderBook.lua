@@ -191,11 +191,14 @@ end
 -- Asks the server for the item's listings (unless its book is current).
 -- Returns the state: "current", "loading", "scanning" (a scan is running;
 -- try again after it) or nil (can't: no item key / auction house closed).
-function OrderBook.Request(key)
+-- `force` (the refresh button): ask again even if current or just failed.
+function OrderBook.Request(key, force)
     local book = books[key]
-    if book and time() - book.t < FRESH then return "current" end
     if pending and pending.key == key then return "loading" end
-    if failed[key] and time() - failed[key] < FRESH then return "failed" end
+    if not force then
+        if book and time() - book.t < FRESH then return "current" end
+        if failed[key] and time() - failed[key] < FRESH then return "failed" end
+    end
     if ns.FullScan and ns.FullScan.IsScanning() then return "scanning" end
     if not (AuctionHouseFrame and AuctionHouseFrame:IsShown()) then return end
     local itemKey = ns.Market.ItemKey(key)

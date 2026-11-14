@@ -124,13 +124,18 @@ Features so far:
       created through LibAHTab so the tabs line up.
   - `/fah strategy` prints the top 5 of each in chat; `/fah strategy
     resale|vendor|disenchant|sell` one kind.
-- **Market tab**: a "Market" tab after Deals. Search for an item (the search box is the
-  only way to pick one; with several matches, click one in the list). It shows:
-  - the lowest price now and how many are listed, the market value and today's lowest;
-  - volatility, sales velocity (estimated sold per day), the 24-hour trend and how many
-    days of data there are;
-  - a 30-day graph: daily lowest price (gold), daily highest (gray), the market value
-    (blue) and estimated sales per day (gray bars), with price and day labels.
+- **Market tab**: a "Market" tab after Deals, laid out like Blizzard's Sell view (its
+  panels, backgrounds and borders sit exactly on the Sell view's). Search for an item
+  with the box next to the "Item Statistics" tab (the only way to pick one; with
+  several matches, click one in the list).
+  - Left panel (where the Sell view has its item and price inputs): the item, then rows
+    with the lowest price now and how many are listed, the market value, today's
+    lowest, volatility, sales velocity (estimated sold per day), the 24-hour trend, how
+    many days of data there are, and the order book (below).
+  - Right panel (where the Sell view lists auctions, same background): a 30-day graph
+    of the daily lowest price (gold), daily highest (gray), the market value (blue)
+    and estimated sales per day (gray bars), with price and day labels. The refresh
+    button above it asks the server for the item's listings again.
   - **Order book**: when an item is shown, the tab asks the server for its listings
     (the same search Blizzard's buy view sends; waits for the rate limit, not while a
     scan runs) and shows:

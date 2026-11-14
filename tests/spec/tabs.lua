@@ -218,7 +218,8 @@ eq(list.points[2][5], 27, "list bottom 2 above the money display's top")
 local rows = scrollBox.rows
 -- Blizzard list look: header buttons from Blizzard's template, list background atlas
 local headers = {}
-for _, f in ipairs(created) do if f.template == "AuctionHouseTableHeaderStringTemplate" then headers[#headers + 1] = f end end
+local function under(f, root) while type(f) == "table" do if f == root then return true end f = rawget(f, "parent") end return false end
+for _, f in ipairs(created) do if f.template == "AuctionHouseTableHeaderStringTemplate" and under(f, panel) then headers[#headers + 1] = f end end
 eq(#headers, 6, "6 Blizzard header buttons (Item + 5 columns)")
 eq(headers[1].text, "Item", "first header")
 eq(headers[2].text, "Buy at", "resale column header")
@@ -230,7 +231,7 @@ eq(headerRow.points[1][4], 4, "HeaderContainer TOPLEFT x=4"); eq(headerRow.point
 eq(headerRow.points[2][4], -26, "HeaderContainer TOPRIGHT x=-26")
 -- Blizzard's refresh button and list text
 local refreshBtn
-for _, f in ipairs(created) do if f.template == "RefreshButtonTemplate" then refreshBtn = f end end
+for _, f in ipairs(created) do if f.template == "RefreshButtonTemplate" and f.parent == panel then refreshBtn = f end end
 eq(refreshBtn ~= nil, true, "Blizzard's refresh button template")
 eq(refreshBtn.parent, panel, "refresh button on the panel")
 eq(refreshBtn.points[1][2], list, "refresh anchored to the list's top right")
@@ -329,15 +330,29 @@ eq(#M.Find("clo"), 1, "partial match"); eq(M.Find("cloth")[1].key, "100:0", "exa
 eq(#M.Find("sword"), 0, "no match")
 mtab.scripts.OnClick()
 M.Search("Cloth")
-eq(mpanel.item.shown, true, "item shown after search")
-eq(mpanel.item.name.text, "|cffffffffCloth|r", "item name")
-eq(mpanel.item.prices.text:find("Lowest now: 9c (35 listed)", 1, true) ~= nil, true, "prices line: " .. tostring(mpanel.item.prices.text))
-eq(mpanel.item.stats.text:find("sold/day", 1, true) ~= nil, true, "stats line: " .. tostring(mpanel.item.stats.text))
-eq(mpanel.graph.shown, true, "graph shown")
+eq(mpanel.left.content.shown, true, "item shown after search")
+-- Sell view layout: panels, backgrounds and borders on Blizzard's sell frames
+local L, R = mpanel.left, mpanel.graph
+-- (no ItemSellFrame in this fake client: the XML's anchors)
+eq(L.points[1][1], "TOP", "left: TOP"); eq(L.points[1][2], AuctionHouseFrame, "of the window"); eq(L.points[1][5], -69, "69 down")
+eq(L.points[2][2], moneyBorder, "left: BOTTOM on the money display"); eq(L.points[2][5], 2, "2 above it")
+eq(L.points[3][1], "LEFT", "left: LEFT"); eq(L.points[3][4], 4, "4 in")
+eq(R.points[1][2], sellList, "right panel on ItemSellList"); eq(R.points[1][1], "TOPLEFT", "right TOPLEFT")
+eq(R.points[2][2], sellList, "right panel BOTTOMRIGHT on ItemSellList"); eq(R.points[2][1], "BOTTOMRIGHT", "right BOTTOMRIGHT")
+eq(R.bg.points[1][2], sellBg, "right background on Blizzard's background"); eq(R.border.points[1][2], sellNS, "right border on Blizzard's border")
+eq(L.points[1][1] ~= nil, true, "left anchored")
+eq(L.tab.label.text, "Item Statistics", "tab label")
+eq(R.header.text, "Price History (30 days)", "right header")
+eq(mpanel.left.display.name.text, "|cffffffffCloth|r", "item name")
+eq(mpanel.left.rows.price.value.text, "9c (35 listed)", "lowest now row")
+eq(mpanel.left.rows.price.label.text, "Lowest now", "row label")
+eq(mpanel.left.rows.sales.value.text:find("sold/day", 1, true) ~= nil, true, "sales row: " .. tostring(mpanel.left.rows.sales.value.text))
+eq(mpanel.graph.plot.shown, true, "graph shown")
 eq(mpanel.graph.empty.shown, false, "graph has data")
 eq((rawget(mpanel.graph.plot, "linesMade") or 0) > 5, true, "graph lines drawn: " .. tostring(rawget(mpanel.graph.plot, "linesMade")))
 M.Search("nothing here")
-eq(mpanel.item.shown, false, "no match hides the item")
+eq(mpanel.left.content.shown, false, "no match hides the item")
+eq(mpanel.hint.shown, true, "hint shown")
 eq(mpanel.hint.text:find("No tracked item matches", 1, true) ~= nil, true, "no-match hint")
 -- order book: statistics
 local OB = ns.OrderBook
@@ -370,18 +385,25 @@ eq(#sentQueries, before + 1, "item search sent")
 local q1 = sentQueries[#sentQueries]
 eq(q1.itemKey.itemID, 100, "for the shown item"); eq(q1.sorts[1].sortOrder, 0, "sorted by price"); eq(q1.separate, true, "own items separate")
 -- (C_Timer runs at once here, so the 15 s timeout has already passed)
-eq(mpanel.item.book.text:find("no answer", 1, true) ~= nil, true, "no answer: " .. tostring(mpanel.item.book.text))
+eq(mpanel.left.rows.buy1.value.text:find("no answer", 1, true) ~= nil, true, "no answer: " .. tostring(mpanel.left.rows.buy1.value.text))
 M.Show("100:0")
 eq(#sentQueries, before + 1, "not re-sent right after no answer")
 commodityResults = { { unitPrice = 9, quantity = 30 }, { unitPrice = 10, quantity = 5 }, { unitPrice = 40, quantity = 200 } }
 fire("COMMODITY_SEARCH_RESULTS_UPDATED", 100)
-local bookLine, depthLine = mpanel.item.book.text, mpanel.item.depth.text
-eq(bookLine:find("Buy 20: 180c (9c each)", 1, true) ~= nil, true, "buy 20 line: " .. tostring(bookLine))
-eq(bookLine:find("Buy 200: 6920c (35c each)", 1, true) ~= nil, true, "buy 200 line: " .. tostring(bookLine))
-eq(bookLine:find("Buy 100: 2920c (29c each)", 1, true) ~= nil, true, "buy 100 line: " .. tostring(bookLine))
-eq(depthLine:find("Wall: 30 at 9c", 1, true) ~= nil, true, "wall: " .. tostring(depthLine))
-eq(depthLine:find("235 listed at 3 prices", 1, true) ~= nil, true, "listed: " .. tostring(depthLine))
-eq(depthLine:find("order book just now", 1, true) ~= nil, true, "age: " .. tostring(depthLine))
+local rows = mpanel.left.rows
+eq(rows.buy1.label.text, "Buy 20", "commodity: buy 20"); eq(rows.buy1.value.text, "180c (9c each)", "buy 20 value")
+eq(rows.buy2.label.text, "Buy 100", "buy 100 label"); eq(rows.buy2.value.text, "2920c (29c each)", "buy 100 value")
+eq(rows.buy3.value.text, "6920c (35c each)", "buy 200 value")
+eq(rows.wall.value.text, "30 at 9c", "wall row")
+eq(rows.listed.value.text, "235 at 3 prices", "listings row")
+eq(mpanel.left.note.text, "Order book: just now", "order book age note")
+eq(mpanel.count.text, "235 listed", "count left of the refresh button")
+-- refresh button: asks again even though the book is current
+local beforeRefresh = #sentQueries
+ns.MarketTab.Refresh()
+eq(#sentQueries, beforeRefresh + 1, "refresh re-sends the search")
+fire("COMMODITY_SEARCH_RESULTS_UPDATED", 100)
+before = before + 1
 M.Show("100:0")
 eq(#sentQueries, before + 1, "current book: no new search")
 -- throttled: waits, nothing sent
@@ -403,6 +425,6 @@ M.Show("100:0"); eq(#sentQueries, before + 2, "no duplicate while loading")
 now = now + 120; commodityResults = {}
 fire("COMMODITY_SEARCH_RESULTS_UPDATED", 100)
 eq(ns.OrderBook.Get("100:0") and #ns.OrderBook.Get("100:0").levels, 0, "sold out: empty book")
-eq(mpanel.item.book.text:find("nothing listed", 1, true) ~= nil, true, "empty book line: " .. tostring(mpanel.item.book.text))
+eq(mpanel.left.rows.buy1.value.text, "nothing listed with a buyout", "empty book row")
 C_Timer.After = realAfter
 io.write(fails == 0 and "ALL PASS\n" or (fails .. " FAILURES\n"))

@@ -34,6 +34,7 @@ const WOW = `
   PanelTemplates_DeselectTab PanelTemplates_SelectTab PanelTemplates_SetNumTabs
   PanelTemplates_SetTab PanelTemplates_TabResize PlaySound REFRESH SELL_PRICE
   SLASH_FORGEDFOREVERAH1 SOUNDKIT ScrollBoxConstants ScrollBoxListMixin ScrollUtil
+  SetItemButtonTexture
   SlashCmdList TooltipDataProcessor UnitFactionGroup geterrorhandler hooksecurefunc
   issecretvalue
 `;
