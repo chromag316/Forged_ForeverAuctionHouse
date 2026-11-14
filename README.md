@@ -146,6 +146,13 @@ Features so far:
 - Buying, bidding, posting and cancelling are restricted calls and must come from
   a click.
 - Use the client's default look: Blizzard templates and font objects, no custom themes.
+- **Tests** (`tests/`, needs Node.js): `cd tests`, `npm install` once, then `npm test`.
+  It checks that every file in the .toc parses (Lua 5.1, well-formed XML) and uses
+  no unknown globals (the allowed WoW globals are listed in `tests/check.js`; add new
+  ones there), then runs the specs in `tests/spec/` in a Lua 5.1 interpreter
+  (fengari) with stubs for the client. `npm test history tabs` runs only those
+  specs. The tests can't replace checking in game: layout, taint and the real
+  server aren't covered. The `tests` folder isn't needed in the installed addon.
 - Blizzard's Forever UI source: [Gethe/wow-ui-source, branch `forever`](https://github.com/Gethe/wow-ui-source/tree/forever/Interface/AddOns/Blizzard_AuctionHouseUI).
 
 ## Credits

@@ -1,0 +1,13 @@
+{
+  "name": "forged-forever-auction-house-tests",
+  "private": true,
+  "description": "Offline checks and tests for the Forged Forever Auction House addon",
+  "scripts": {
+    "test": "node run.js",
+    "check": "node check.js"
+  },
+  "devDependencies": {
+    "fengari": "^0.1.4",
+    "luaparse": "^0.3.1"
+  }
+}
