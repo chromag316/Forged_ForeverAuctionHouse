@@ -551,6 +551,9 @@ eq(g.plot.shown, true, "history view by default"); eq(g.timing.shown, false, "ti
 g.timingHeader.scripts.OnClick()
 eq(g.timing.shown, true, "timing view shown"); eq(g.plot.shown, false, "graph hidden"); eq(g.legend.shown, false, "legend hidden")
 eq(g.profit.shown, true, "profit box stays")
+local labelShown = false; for _, l in ipairs(g.labels) do if l.shown then labelShown = true end end
+eq(labelShown, false, "graph price and day labels hidden")
+eq(#g.labels > 0, true, "the graph had labels")
 eq(g.timing.rows.avg7.label.text, "7-day average", "7-day row")
 eq(g.timing.rows.avg30.label.text, "30-day average", "30-day row")
 eq(g.timing.note.text, "No timing data yet: every scan from now on adds to it.", "no timing yet")
@@ -565,6 +568,7 @@ eq(g.timing.note.text, "Vs. its usual level, from ~6 scans (recent ones count mo
 ns.Market.Timing = realTiming
 g.header.scripts.OnClick()
 eq(g.plot.shown, true, "back to the history"); eq(g.timing.shown, false, "timing hidden again")
+eq(g.labels[1].shown, true, "labels back with the graph")
 M.Show(nil)
 eq(g.timing.shown, false, "no item: no timing")
 io.write(fails == 0 and "ALL PASS\n" or (fails .. " FAILURES\n"))

@@ -731,6 +731,8 @@ function MarketTab.Show(key)
         DrawGraph(key)
     else
         graph.empty:Hide()
+        -- The graph's price and day labels are on the panel, not the plot.
+        for _, label in ipairs(graph.labels) do label:Hide() end
         MarketTab.DrawTiming(key)
     end
 end
