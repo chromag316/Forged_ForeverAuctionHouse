@@ -108,7 +108,8 @@ left after costs. In order; 1-4 mostly use data already collected.
    - your own listings: count, price, cheapest or undercut and by how much
      (search results flag your own items);
    - supply now vs. the 7-day average (low supply: sell; a flood: buy).
-3. **Demand you can trust:**
+3. ~~**Demand you can trust:**~~ Done (Market tab rows Sales, Sell-through, Days of
+   supply, Data; `Market.Stats().scans`; the price's age is the order book note):
    - sell-through (estimated sold / listed per day);
    - days of supply (listed / sales per day; under ~2 fast, over ~14 slow);
    - confidence: number of scans and days behind the figures, and the price's age.

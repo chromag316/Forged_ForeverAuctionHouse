@@ -136,10 +136,18 @@ Features so far:
   with the search box, which is where the Buy view has its own (the only way to pick
   one; with several matches, click one in the list).
   - Left panel (where the Sell view has its item and price inputs): the item, then rows
-    with the lowest price now and how many are listed, the market value, today's
-    lowest, volatility, sales velocity (estimated sold per day), the 24-hour trend, how
-    many days of data there are (in the Sales row), the order book and the
+    in four groups: price (lowest now and how many are listed, market value, today's
+    lowest, volatility, the 24-hour trend), demand (below), the order book and the
     competition (below).
+  - **Demand**:
+    - Sales: estimated sold per day. "Sold" means listings that disappeared between
+      scans, which includes auctions that expired or were cancelled, so it's an upper
+      bound.
+    - Sell-through: that as a share of what's listed now ("54% per day").
+    - Days of supply: how long what's listed would last at that pace ("1.9 days"),
+      marked green "(fast)" under 2 days and red "(slow)" over 14.
+    - Data: what the figures rest on: completed scans since the item was first seen
+      (scan times are kept for 3 days) and days of data ("6 scans, 2.0 days").
   - Right panel (where the Sell view lists auctions, same background): a 30-day graph
     of the daily lowest price (gold), daily highest (gray), the market value (blue)
     and estimated sales per day (gray bars), with price and day labels. The refresh

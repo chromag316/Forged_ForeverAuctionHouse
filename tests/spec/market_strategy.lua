@@ -301,4 +301,11 @@ data.items["780:0"] = { s = { { now - 2 * DAY, 10, 0 }, { now - DAY, 10, 30 } },
 near((M.AverageQuantity("780:0", 7, now)), 15, "sold-out time counts as 0")
 eq(M.AverageQuantity("nope:0", 7, now), nil, "unknown item")
 data.items["777:0"], data.items["778:0"], data.items["779:0"], data.items["780:0"] = nil, nil, nil, nil
+-- scans behind an item's figures: completed scans since its first snapshot
+data.items["790:0"] = { s = { { now - DAY, 10, 5 } }, d = {} }
+local savedScans = data.scans
+data.scans = { now - 2 * DAY, now - 20 * 3600, now - 3600, now }
+eq(M.Stats("790:0", now).scans, 3, "scans since first seen")
+data.scans = savedScans
+data.items["790:0"] = nil
 io.write(fails == 0 and "ALL PASS\n" or (fails .. " FAILURES\n"))

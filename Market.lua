@@ -285,6 +285,7 @@ end
 --   trend            -- % change: last 24 h average vs. the 48 h before (nil if unknown)
 --   volatility       -- price std. deviation / mean over the detail window
 --   days             -- days of data (detail + summaries)
+--   scans            -- completed scans since the item's first snapshot (last 3 days)
 -- }
 function Market.Stats(key, now)
     now = now or time()
@@ -322,6 +323,13 @@ function Market.Stats(key, now)
     end
     span = span + #item.d
     stats.days = span
+    -- Completed scans since the item's first snapshot (scan times are kept
+    -- for the detail window, 3 days).
+    local scans = 0
+    for _, t in ipairs(data.scans) do
+        if t >= first then scans = scans + 1 end
+    end
+    stats.scans = scans
     if span >= 0.25 then stats.salesPerDay = sold / span end
 
     -- Trend and volatility from prices in the detail window.

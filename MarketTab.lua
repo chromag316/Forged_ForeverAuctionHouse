@@ -220,14 +220,17 @@ end
 -- for any quantity in Blizzard's buy view.)
 local ROWS = {
     { "price", "Lowest now" }, { "value", "Market value" }, { "today", "Today's lowest" },
-    { "volatility", "Volatility" }, { "sales", "Sales" }, { "trend", "Trend (24 h)" },
+    { "volatility", "Volatility" }, { "trend", "Trend (24 h)" },
+    false,
+    { "sales", "Sales" }, { "sellthrough", "Sell-through" }, { "dayssupply", "Days of supply" },
+    { "data", "Data" },
     false,
     { "below", "Below value" }, { "wall", "Wall" },
     false,
     { "sellers", "Sellers" }, { "own", "Your listings" }, { "supply", "Supply" },
 }
 local ROW_TOP = -96    -- first row, below the item display (12 + 72 + 8 + 4)
-local ROW_STEP = 22
+local ROW_STEP = 21
 local ROW_GAP = 8
 local LABEL_WIDTH = 110
 
@@ -240,12 +243,13 @@ function MarketTab.RowValues(key)
         value = Money(s.value),
         today = Money(s.today),
         volatility = s.volatility and Pct(s.volatility * 100) or "---",
-        sales = (s.salesPerDay and ("~%.1f sold/day"):format(s.salesPerDay) or "---")
-            .. (s.days and (" (%.1f days)"):format(s.days) or ""),
+        sales = s.salesPerDay and ("~%s sold/day"):format(MarketTab.Decimal(s.salesPerDay)) or "---",
         trend = Pct(s.trend, true),
+        data = MarketTab.DataText(s.scans, s.days),
         below = "---", wall = "---",
         sellers = "---", own = "---", supply = MarketTab.SupplyText(key, s.quantity),
     }
+    v.sellthrough, v.dayssupply = MarketTab.DemandText(s.salesPerDay, s.quantity)
     local OB = ns.OrderBook
     local book = OB.Get(key)
     if not book then
@@ -276,6 +280,43 @@ function MarketTab.RowValues(key)
 end
 
 local GOOD, BAD = "|cff40c040", "|cffff5050"
+local FAST_DAYS, SLOW_DAYS = 2, 14
+
+-- 1 decimal, with thousands separators: 2186.5 -> "2,186.5"
+function MarketTab.Decimal(x)
+    local whole = math.floor(x)
+    local tenth = math.floor((x - whole) * 10 + .5)
+    if tenth == 10 then whole, tenth = whole + 1, 0 end
+    return Count(whole) .. "." .. tenth
+end
+
+-- Sell-through: share of what's listed that sells per day ("54% per day");
+-- days of supply: how long what's listed lasts at that pace ("1.9 days",
+-- fast under 2, slow over 14). "Sold" = listings that disappeared between
+-- scans, which includes expired and cancelled ones.
+function MarketTab.DemandText(salesPerDay, quantity)
+    if not salesPerDay then return "---", "---" end
+    if not quantity or quantity <= 0 then return "nothing listed", "---" end
+    if salesPerDay <= 0 then return "0% per day", "no sales seen" end
+    local through = salesPerDay / quantity * 100
+    local throughText = (through < 1 and "<1" or tostring(math.floor(through + .5))) .. "% per day"
+    local days = quantity / salesPerDay
+    local daysText = MarketTab.Decimal(days) .. " days"
+    if days < FAST_DAYS then
+        daysText = daysText .. " " .. GOOD .. "(fast)|r"
+    elseif days > SLOW_DAYS then
+        daysText = daysText .. " " .. BAD .. "(slow)|r"
+    end
+    return throughText, daysText
+end
+
+-- What the figures rest on: "6 scans, 2.0 days" (scans of the last 3 days
+-- since the item was first seen; days of data in all).
+function MarketTab.DataText(scans, days)
+    if not days then return "---" end
+    local n = scans or 0
+    return ("%s %s, %s days"):format(Count(n), n == 1 and "scan" or "scans", MarketTab.Decimal(days))
+end
 
 -- Sellers: exact, or "4 to 23" when the server names only some of a row's
 -- owners (OrderBook.Competition); for commodities "at N prices" (the server
