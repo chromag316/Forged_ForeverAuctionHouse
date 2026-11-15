@@ -94,16 +94,23 @@ end
 OrderBook.Levels = Levels
 
 -- Competition from the same entries:
---   auctions      number of auctions (search result rows)
---   sellers       distinct seller names, you included; sellersMore: some
---                 auction has more owners than it names, so "at least"
+--   auctions      number of search result rows: one per auction for items,
+--                 one per price for commodities (the server groups those)
+--   sellers       distinct seller names, you included
+--   sellersMore   some row has more owners than it names
+--   sellersLow,   how many sellers there are at least / at most: a row
+--   sellersHigh   names only some of its owners but says how many; the
+--                 same seller can be in several rows. Low = the larger of
+--                 the distinct names and the most owners in one row; high =
+--                 the rows' owner counts added up (equal when exact)
 --   own           your listings: { quantity, auctions, price = your lowest }
 --                 or nil (the search keeps your auctions apart, as
 --                 Blizzard's buy view does)
 --   otherLowest   the lowest price of anyone else's units
 --   cheaperUnits  others' units listed below your lowest price
 local function Competition(entries)
-    local c = { auctions = 0, sellers = 0, sellersMore = false, cheaperUnits = 0 }
+    local c = { auctions = 0, sellers = 0, sellersMore = false, cheaperUnits = 0, sellersHigh = 0 }
+    local maxRow = 0
     local names = {}
     local own = { quantity = 0, auctions = 0 }
     local others = {}
@@ -119,7 +126,10 @@ local function Competition(entries)
                 end
                 listed = listed + 1
             end
-            if (e.ownersTotal or 0) > listed then c.sellersMore = true end
+            local rowOwners = math.max(e.ownersTotal or 0, listed)
+            if rowOwners > listed then c.sellersMore = true end
+            maxRow = math.max(maxRow, rowOwners)
+            c.sellersHigh = c.sellersHigh + rowOwners
             local mine = math.min(e.own or 0, quantity)
             if mine > 0 then
                 own.quantity, own.auctions = own.quantity + mine, own.auctions + 1
@@ -131,6 +141,8 @@ local function Competition(entries)
             end
         end
     end
+    c.sellersLow = math.max(c.sellers, maxRow)
+    if not c.sellersMore then c.sellersLow, c.sellersHigh = c.sellers, c.sellers end
     if own.quantity > 0 then
         c.own = own
         for _, o in ipairs(others) do

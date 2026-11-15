@@ -224,14 +224,14 @@ local ROWS = {
     false,
     { "below", "Below value" }, { "wall", "Wall" },
     false,
-    { "auctions", "Auctions" }, { "own", "Your listings" }, { "supply", "Supply" },
+    { "sellers", "Sellers" }, { "own", "Your listings" }, { "supply", "Supply" },
 }
 local ROW_TOP = -96    -- first row, below the item display (12 + 72 + 8 + 4)
 local ROW_STEP = 22
 local ROW_GAP = 8
 local LABEL_WIDTH = 110
 
--- Values for the rows (OrderBook.lua for below / wall / auctions / own),
+-- Values for the rows (OrderBook.lua for below / wall / sellers / own),
 -- and the order book's note. Without a book, the Below value row says why.
 function MarketTab.RowValues(key)
     local s = ns.Market.Stats(key)
@@ -244,7 +244,7 @@ function MarketTab.RowValues(key)
             .. (s.days and (" (%.1f days)"):format(s.days) or ""),
         trend = Pct(s.trend, true),
         below = "---", wall = "---",
-        auctions = "---", own = "---", supply = MarketTab.SupplyText(key, s.quantity),
+        sellers = "---", own = "---", supply = MarketTab.SupplyText(key, s.quantity),
     }
     local OB = ns.OrderBook
     local book = OB.Get(key)
@@ -271,20 +271,27 @@ function MarketTab.RowValues(key)
     end
     local wallPrice, wallQuantity = OB.Wall(book)
     v.wall = wallPrice and ("%s at %s"):format(Count(wallQuantity), Money(wallPrice)) or "none"
-    v.auctions, v.own = MarketTab.CompetitionText(book.competition)
+    v.sellers, v.own = MarketTab.CompetitionText(book.competition, book.commodity)
     return v, note
 end
 
 local GOOD, BAD = "|cff40c040", "|cffff5050"
 
--- "48 by 12 sellers" (12+ when some auction names fewer owners than it has)
--- and your listings: cheapest (or tied), or undercut by how many cheaper
--- units of others.
-function MarketTab.CompetitionText(c)
+-- Sellers: exact, or "4 to 23" when the server names only some of a row's
+-- owners (OrderBook.Competition); for commodities "at N prices" (the server
+-- sends one row per price), for other items "(N auctions)". And your
+-- listings: cheapest (or tied), or undercut by how many cheaper units of
+-- others.
+function MarketTab.CompetitionText(c, commodity)
     if not c then return "---", "---" end
-    local sellers = Count(c.sellers) .. (c.sellersMore and "+" or "")
-    local auctions = ("%s by %s %s"):format(Count(c.auctions), sellers,
-        (c.sellers == 1 and not c.sellersMore) and "seller" or "sellers")
+    local sellers = c.sellersLow == c.sellersHigh and Count(c.sellersLow)
+        or ("%s to %s"):format(Count(c.sellersLow), Count(c.sellersHigh))
+    local auctions
+    if commodity then
+        auctions = ("%s at %s %s"):format(sellers, Count(c.auctions), c.auctions == 1 and "price" or "prices")
+    else
+        auctions = ("%s (%s %s)"):format(sellers, Count(c.auctions), c.auctions == 1 and "auction" or "auctions")
+    end
     local own = c.own
     if not own then return auctions, "none" end
     local mine = ("%s at %s"):format(Count(own.quantity), Money(own.price))
@@ -302,7 +309,8 @@ function MarketTab.SupplyText(key, quantity)
     if not avg then return Count(quantity) .. " (no average yet)" end
     local text = ("%s vs %s avg"):format(Count(quantity), Count(math.floor(avg + .5)))
     if avg > 0 then text = text .. " (" .. Pct((quantity - avg) / avg * 100, true) .. ")" end
-    if days < 6.5 then text = text .. (" over %.1f d"):format(days) end
+    -- (with less than 7 days of data the average covers what there is; the
+    -- Sales row shows how many days that is)
     return text
 end
 

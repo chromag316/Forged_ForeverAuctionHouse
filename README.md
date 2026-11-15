@@ -147,14 +147,16 @@ Features so far:
     Opening the item in Blizzard's buy view updates it too. Gear: the item level the
     lists use. Kept for the session only.
   - **Competition** (from the same search):
-    - Auctions: how many auctions by how many sellers, you included ("12+" when an
-      auction has more owners than the server names);
+    - Sellers, you included: for stackable items "4 to 23 at 17 prices" (the server
+      sends one row per price, which says how many sellers it has but names only some,
+      so it's a range: at least the most sellers in one row, at most all rows' sellers
+      added up; one number when it's exact), for other items "4 (17 auctions)";
     - Your listings: how many you have at your lowest price, and whether that's the
       cheapest (green; a tie counts) or undercut (red) by how many of others' units;
     - Supply: the quantity listed now vs. the average over the last 7 days, with the
       difference in %. The average is time-weighted (a quantity counts for as long as it
       was listed) and uses daily averages for days older than 3; with less than 7
-      days of data it says over how many.
+      days of data it covers what there is (the Sales row shows how many days).
   - Only items a scan has seen can be found. The graph uses the daily summaries for
     older days and the scan detail for the last 3; between changes the last price
     carries over.
