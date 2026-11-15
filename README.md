@@ -172,6 +172,19 @@ Features so far:
       difference in %. The average is time-weighted (a quantity counts for as long as it
       was listed) and uses daily averages for days older than 3; with less than 7
       days of data it covers what there is (the Sales row shows how many days).
+  - **Profit after costs** (under the graph):
+    - Flip margin: buying at the lowest price and reselling at market value, after the
+      5% cut, per unit and in % of the buy price (green a profit, red a loss).
+    - Deposit: per unit, from the client's own calculation for the duration Blizzard's
+      sell view has selected. Stackable items by item; other items only while you
+      have one in your bags. With sales data, the expected loss: the deposit is
+      refunded on a sale, so what's lost is the deposit times the chance the auction
+      doesn't sell within the duration (from the sell-through rate).
+    - Break-even buy: the most you can pay to resell at market value, after the cut
+      and the expected deposit loss.
+    - Vendor: what a vendor pays for it (a floor) and sells it for (a ceiling; learned
+      at merchants).
+    - Disenchant: the expected value of the materials, for disenchantable gear.
   - Only items a scan has seen can be found. The graph uses the daily summaries for
     older days and the scan detail for the last 3; between changes the last price
     carries over.

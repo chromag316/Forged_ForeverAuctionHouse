@@ -88,7 +88,7 @@ hooksecurefunc = function(t, name, fn)
   t[name] = function(...) local r = orig(...); fn(...); return r end
 end
 
-C_Item = { GetItemInfo = function(x) local id = tonumber(tostring(x):match("(%d+)")); if id == 100 then return "Cloth", nil, 1 end end,
+C_Item = { GetItemInfo = function(x) if itemInfoOverride then return itemInfoOverride(x) end local id = tonumber(tostring(x):match("(%d+)")); if id == 100 then return "Cloth", nil, 1 end end,
   GetItemInfoInstant = function() return 100, "", "", "", 134000 end }
 ITEM_QUALITY_COLORS = { [1] = { hex = "|cffffffff" } }
 local keyInfoLoaded = true
@@ -483,4 +483,54 @@ st, ds = MT.DemandText(5, 0); eq(st, "nothing listed", "nothing listed"); eq(ds,
 st, ds = MT.DemandText(nil, 50); eq(st, "---", "too little data")
 eq(MT.DataText(6, 2.04), "6 scans, 2.0 days", "data text"); eq(MT.DataText(1, 0.5), "1 scan, 0.5 days", "one scan")
 eq(MT.DataText(3, nil), "---", "no data")
+-- profit after costs (the box under the graph)
+local PV = MT.ProfitValues
+local realStats, realGetItemInfo = ns.Market.Stats, C_Item.GetItemInfo
+local stats = { value = 100, listed = true, price = 80, salesPerDay = 10, quantity = 40 }
+ns.Market.Stats = function() return stats end
+GetCVar = function(name) if name == "auctionHouseDurationDropdown" then return "2" end end
+AUCTION_DURATION_TWO = "24 Hours"
+local depositArgs
+C_AuctionHouse.GetItemKeyInfo = function() return { isCommodity = true } end
+C_AuctionHouse.CalculateCommodityDeposit = function(_, duration, quantity) depositArgs = { duration, quantity }; return 4 * quantity end
+local idx, hours, dtext = MT.Duration()
+eq(idx, 2, "duration from Blizzard's saved choice"); eq(hours, 24, "hours from its text"); eq(dtext, "24 Hours", "duration text")
+local pv = PV("100:0")
+eq(pv.flip, "|cff40c040+15c each (+19%)|r", "flip: 100 after 5% cut = 95, minus 80")
+eq(depositArgs[1], 2, "deposit for the sell view's duration"); eq(depositArgs[2], 100, "per unit from 100")
+-- sells 10 of 40 a day: 25% within 24 h, so 75% of the 4c deposit is lost
+eq(pv.deposit, "4c each (24 Hours), ~3c lost", "deposit and expected loss")
+eq(pv.breakeven, "92c to resell at value", "break-even: 95 - 3")
+eq(pv.disenchant, "---", "no item info: no disenchant")
+stats = { value = 100, listed = true, price = 120, salesPerDay = 100, quantity = 40 }
+pv = PV("100:0")
+eq(pv.flip, "|cffff5050-25c each (-21%)|r", "negative margin in red")
+eq(pv.deposit, "4c each (24 Hours), ~0c lost", "sells within the duration: nothing lost")
+eq(pv.breakeven, "95c to resell at value", "break-even without deposit loss")
+stats = { listed = false }
+pv = PV("100:0")
+eq(pv.flip, "no market value yet", "no value"); eq(pv.breakeven, "---", "no break-even")
+eq(pv.deposit, "4c each (24 Hours)", "no sales data: no expected loss")
+stats = { value = 100, listed = false }
+eq(PV("100:0").flip, "not listed", "not listed")
+-- other items: the client needs one in your bags
+C_AuctionHouse.GetItemKeyInfo = function() return { isCommodity = false } end
+eq(PV("100:0").deposit, "--- (needs one in your bags)", "item not in bags")
+-- vendor and disenchant from the item's info
+itemInfoOverride = function() return "Sword", nil, 2, 12, nil, nil, nil, nil, "INVTYPE_WEAPON", nil, 25 end
+ns.Vendor = { BuyPrice = function() return 120, true end }
+pv = PV("100:0")
+eq(pv.vendor, "pays 25c, sells for 120c (limited)", "vendor floor and ceiling")
+eq(pv.disenchant, "--- (no material prices yet)", "disenchantable, materials unpriced")
+itemInfoOverride = function() return "Cloth", nil, 1, 5, nil, nil, nil, nil, "", nil, 0 end
+ns.Vendor = nil
+pv = PV("100:0")
+eq(pv.vendor, "pays nothing", "vendor pays nothing"); eq(pv.disenchant, "not disenchantable", "not gear")
+ns.Market.Stats, itemInfoOverride = realStats, nil
+-- layout: under the graph, which ends above it
+local profit = mpanel.graph.profit
+eq(profit.rows.flip.label.text, "Flip margin", "profit rows under the graph")
+eq(profit.rows.breakeven.label.text, "Break-even buy", "break-even row")
+eq(mpanel.graph.plot.points[2][3], 26 + 5 * 20 + 22, "graph ends above the profit box")
+eq(profit.points[1][1], "BOTTOMLEFT", "box at the panel's bottom")
 io.write(fails == 0 and "ALL PASS\n" or (fails .. " FAILURES\n"))

@@ -13,6 +13,8 @@ local _, ns = ...
 --   gray line   daily highest price
 --   blue line   market value (price history)
 --   gray bars   estimated sales per day
+-- and under the graph, profit after costs: flip margin, deposit and its
+-- expected loss, break-even buy price, vendor and disenchant values.
 -- Data: Market.lua (daily summaries for 30 days, scan snapshots for 3 days)
 -- and the price history. The graph is drawn with the client's own line and
 -- texture widgets. The tab itself is added by Tabs.lua.
@@ -355,6 +357,133 @@ function MarketTab.SupplyText(key, quantity)
     return text
 end
 
+------------------------------------------------------------------------
+-- Profit after costs: the box under the graph
+------------------------------------------------------------------------
+
+local PROFIT_ROWS = {
+    { "flip", "Flip margin" }, { "deposit", "Deposit" }, { "breakeven", "Break-even buy" },
+    { "vendor", "Vendor" }, { "disenchant", "Disenchant" },
+}
+local PROFIT_STEP = 20
+local PROFIT_HEIGHT = #PROFIT_ROWS * PROFIT_STEP + 22
+local DURATION_HOURS = { 12, 24, 48 }   -- if the duration's text has no number
+local DEPOSIT_QUANTITY = 100            -- commodities: per unit from 100 (rounding)
+
+local function SignedMoney(c)
+    if c < 0 then return "-" .. Money(-c) end
+    return "+" .. Money(c)
+end
+
+-- The duration Blizzard's sell view posts with (its saved choice, the
+-- auctionHouseDurationDropdown setting): index 1-3, hours, its text.
+function MarketTab.Duration()
+    local ok, cvar = pcall(GetCVar, "auctionHouseDurationDropdown")
+    local index = ok and tonumber(cvar) or 2
+    if index < 1 or index > 3 then index = 2 end
+    local text = _G[({ "AUCTION_DURATION_ONE", "AUCTION_DURATION_TWO", "AUCTION_DURATION_THREE" })[index]]
+    local hours = type(text) == "string" and tonumber(text:match("(%d+)")) or DURATION_HOURS[index]
+    if type(text) ~= "string" then text = hours .. " h" end
+    return index, hours, text
+end
+
+-- The deposit for one unit (the client's own calculation). Commodities by
+-- item ID; other items only from one in your bags (the client needs the
+-- item itself). Returns deposit or nil, and whether it's a commodity
+-- (nil: unknown).
+function MarketTab.DepositPerUnit(key, duration)
+    local AH = C_AuctionHouse
+    local itemID = tonumber(key:match("^(%d+)"))
+    local commodity
+    local itemKey = ns.Market.ItemKey(key)
+    if itemKey and AH.GetItemKeyInfo then
+        local ok, info = pcall(AH.GetItemKeyInfo, itemKey)
+        if ok and type(info) == "table" and info.isCommodity ~= nil then commodity = info.isCommodity end
+    end
+    if commodity == nil then
+        local book = ns.OrderBook.Get(key)
+        if book then commodity = book.commodity end
+    end
+    if commodity and AH.CalculateCommodityDeposit then
+        local ok, d = pcall(AH.CalculateCommodityDeposit, itemID, duration, DEPOSIT_QUANTITY)
+        if ok and d then return d / DEPOSIT_QUANTITY, commodity end
+    end
+    if ns.Strategy and ItemLocation and AH.CalculateItemDeposit then
+        local bag, slot = ns.Strategy.FindInBags(key)
+        if bag then
+            local ok, d = pcall(AH.CalculateItemDeposit, ItemLocation:CreateFromBagAndSlot(bag, slot), duration, 1)
+            if ok and d then return d, commodity end
+        end
+    end
+    return nil, commodity
+end
+
+-- Values for the profit rows:
+--   flip        lowest price to market value after the 5% cut, per unit
+--   deposit     per unit for the sell view's duration, and the expected
+--               loss: deposits are refunded on a sale, lost when the
+--               auction doesn't sell; the chance it sells within the
+--               duration from the sell-through rate (capped at 100%)
+--   breakeven   the most you can pay to resell at market value: market
+--               value after the cut, minus the expected deposit loss
+--   vendor      what a vendor pays (the floor) and sells it for (a ceiling)
+--   disenchant  expected value of the materials (another floor for gear)
+function MarketTab.ProfitValues(key)
+    local s = ns.Market.Stats(key)
+    local cut = ns.Strategy and ns.Strategy.AH_CUT or 0.05
+    local itemID = tonumber(key:match("^(%d+)"))
+    local v = {}
+
+    local net = s.value and s.value * (1 - cut)
+    if not net then
+        v.flip = "no market value yet"
+    elseif not (s.listed and s.price) then
+        v.flip = "not listed"
+    else
+        local margin = net - s.price
+        v.flip = ("%s%s each (%s)|r"):format(margin > 0 and GOOD or BAD, SignedMoney(margin),
+            Pct(margin / s.price * 100, true))
+    end
+
+    local duration, hours, durationText = MarketTab.Duration()
+    local deposit, commodity = MarketTab.DepositPerUnit(key, duration)
+    local loss
+    if deposit then
+        v.deposit = ("%s each (%s)"):format(Money(deposit), durationText)
+        if s.salesPerDay and s.quantity and s.quantity > 0 then
+            local chance = math.min(1, s.salesPerDay / s.quantity * hours / 24)
+            loss = deposit * (1 - chance)
+            v.deposit = v.deposit .. (", ~%s lost"):format(Money(loss))
+        end
+    elseif commodity then
+        v.deposit = "---"
+    else
+        v.deposit = "--- (needs one in your bags)"
+    end
+
+    v.breakeven = net and (Money(net - (loss or 0)) .. " to resell at value") or "---"
+
+    local _, _, quality, itemLevel, _, _, _, _, equipLoc, _, vendorPays = GetItemInfo(itemID)
+    local vendorSells, limited
+    if ns.Vendor then vendorSells, limited = ns.Vendor.BuyPrice(itemID) end
+    local vendor = {}
+    if vendorPays then vendor[#vendor + 1] = vendorPays > 0 and ("pays " .. Money(vendorPays)) or "pays nothing" end
+    if vendorSells then
+        vendor[#vendor + 1] = "sells for " .. Money(vendorSells) .. (limited and " (limited)" or "")
+    end
+    v.vendor = #vendor > 0 and table.concat(vendor, ", ") or "---"
+
+    if not equipLoc or not ns.Disenchant then
+        v.disenchant = "---"
+    elseif #ns.Disenchant.Distribution(equipLoc, quality, itemLevel, itemID) == 0 then
+        v.disenchant = "not disenchantable"
+    else
+        local value = ns.Disenchant.Value(equipLoc, quality, itemLevel, itemID)
+        v.disenchant = value and (Money(value) .. " in materials") or "--- (no material prices yet)"
+    end
+    return v
+end
+
 local function ItemNameText(key, itemID)
     local name, link, quality = GetItemInfo(itemID)
     local stored, storedQuality = ns.Market.Name(key)
@@ -378,6 +507,7 @@ function MarketTab.Show(key)
         graph.plot:Hide()
         graph.legend:Hide()
         graph.empty:Hide()
+        graph.profit:Hide()
         panel.count:SetText("")
         return
     end
@@ -385,6 +515,7 @@ function MarketTab.Show(key)
     left.content:Show()
     graph.plot:Show()
     graph.legend:Show()
+    graph.profit:Show()
 
     local itemID = tonumber(key:match("^(%d+)"))
     local nameText, link = ItemNameText(key, itemID)
@@ -407,6 +538,10 @@ function MarketTab.Show(key)
         row.value:SetText(values[rowKey] or "---")
     end
     left.note:SetText(note)
+    local profitValues = MarketTab.ProfitValues(key)
+    for rowKey, row in pairs(graph.profit.rows) do
+        row.value:SetText(profitValues[rowKey] or "---")
+    end
     local s = ns.Market.Stats(key)
     panel.count:SetText(s.listed and (Count(s.quantity or 0) .. " listed") or "")
     DrawGraph(key)
@@ -620,7 +755,7 @@ local function BuildRight(frame, left)
     -- below, the legend at the top).
     right.plot = CreateFrame("Frame", nil, right)
     right.plot:SetPoint("TOPLEFT", 66, -19 - 30)
-    right.plot:SetPoint("BOTTOMRIGHT", -36, 26)
+    right.plot:SetPoint("BOTTOMRIGHT", -36, 26 + PROFIT_HEIGHT)
     right.lines, right.textures, right.labels = {}, {}, {}
     right.legend = right:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
     right.legend:SetPoint("TOPRIGHT", -34, -19 - 9)
@@ -635,6 +770,34 @@ local function BuildRight(frame, left)
     right.empty:Hide()
     right.plot:Hide()
     right.legend:Hide()
+
+    -- Profit after costs, under the graph: a divider, then rows like the
+    -- left panel's (gold labels, right-aligned).
+    local profit = CreateFrame("Frame", nil, right)
+    profit:SetPoint("BOTTOMLEFT", right, "BOTTOMLEFT", 4, 4)
+    profit:SetPoint("BOTTOMRIGHT", right, "BOTTOMRIGHT", -4, 4)
+    profit:SetHeight(PROFIT_HEIGHT)
+    local divider = profit:CreateTexture(nil, "ARTWORK")
+    divider:SetColorTexture(1, 1, 1, .12)
+    divider:SetHeight(1)
+    divider:SetPoint("TOPLEFT", profit, "TOPLEFT", 8, 0)
+    divider:SetPoint("TOPRIGHT", profit, "TOPRIGHT", -8, 0)
+    profit.rows = {}
+    for i, r in ipairs(PROFIT_ROWS) do
+        local label = profit:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetWidth(LABEL_WIDTH)
+        label:SetJustifyH("RIGHT")
+        label:SetPoint("TOPLEFT", profit, "TOPLEFT", 7, -12 - (i - 1) * PROFIT_STEP)
+        label:SetText(r[2])
+        local value = profit:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        value:SetJustifyH("LEFT")
+        value:SetWordWrap(false)
+        value:SetPoint("LEFT", label, "RIGHT", 18, 0)
+        value:SetPoint("RIGHT", profit, "RIGHT", -10, 0)
+        profit.rows[r[1]] = { label = label, value = value }
+    end
+    profit:Hide()
+    right.profit = profit
 
     -- Refresh button like the Sell list's: RIGHT of a 200x20 refresh frame at
     -- the list's TOPRIGHT (-4, +30). Asks the server for the order book again.

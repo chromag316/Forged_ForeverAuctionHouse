@@ -114,7 +114,9 @@ left after costs. In order; 1-4 mostly use data already collected.
    - days of supply (listed / sales per day; under ~2 fast, over ~14 slow);
    - confidence: number of scans and days behind the figures, and the price's age.
      Note that a disappeared listing may have expired or been cancelled, not sold.
-4. **Profit after costs:**
+4. ~~**Profit after costs:**~~ Done (`MarketTab.ProfitValues`; a box under the graph:
+   Flip margin, Deposit, Break-even buy, Vendor, Disenchant; the deposit for the sell
+   view's selected duration, other items than stackables only from one in your bags):
    - flip margin: lowest price to market value, minus the 5% cut;
    - deposit (from the client's deposit calculation) and the expected deposit loss
      from the sell-through rate;
