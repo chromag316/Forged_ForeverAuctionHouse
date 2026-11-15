@@ -215,23 +215,24 @@ local function Pct(x, signed)
     return ((signed and v > 0) and "+" or "") .. v .. "%"
 end
 
--- The left panel's rows: { key, label }; false = a small gap. The "buy"
--- labels are set per item (commodities 20 / 100 / 200, others 1 / 5 / 20).
+-- The left panel's rows: { key, label }; false = a small gap. (No "cost to
+-- buy N" rows: Forever's commodity purchase already shows the exact price
+-- for any quantity in Blizzard's buy view.)
 local ROWS = {
     { "price", "Lowest now" }, { "value", "Market value" }, { "today", "Today's lowest" },
-    { "volatility", "Volatility" }, { "sales", "Sales" }, { "trend", "Trend (24 h)" }, { "data", "Data" },
+    { "volatility", "Volatility" }, { "sales", "Sales" }, { "trend", "Trend (24 h)" },
     false,
-    { "buy1", "Buy 20" }, { "buy2", "Buy 100" }, { "buy3", "Buy 200" },
-    { "below", "Below value" }, { "wall", "Wall" }, { "listed", "Listings" },
+    { "below", "Below value" }, { "wall", "Wall" },
+    false,
+    { "auctions", "Auctions" }, { "own", "Your listings" }, { "supply", "Supply" },
 }
 local ROW_TOP = -96    -- first row, below the item display (12 + 72 + 8 + 4)
 local ROW_STEP = 22
 local ROW_GAP = 8
 local LABEL_WIDTH = 110
 
--- Values and labels for the rows (OrderBook.lua for buy / below / wall /
--- listed), and the order book's note. Without a book, the first buy row
--- says why.
+-- Values for the rows (OrderBook.lua for below / wall / auctions / own),
+-- and the order book's note. Without a book, the Below value row says why.
 function MarketTab.RowValues(key)
     local s = ns.Market.Stats(key)
     local v = {
@@ -239,42 +240,30 @@ function MarketTab.RowValues(key)
         value = Money(s.value),
         today = Money(s.today),
         volatility = s.volatility and Pct(s.volatility * 100) or "---",
-        sales = s.salesPerDay and ("~%.1f sold/day"):format(s.salesPerDay) or "---",
+        sales = (s.salesPerDay and ("~%.1f sold/day"):format(s.salesPerDay) or "---")
+            .. (s.days and (" (%.1f days)"):format(s.days) or ""),
         trend = Pct(s.trend, true),
-        data = s.days and ("%.1f days"):format(s.days) or "---",
-        buy1 = "---", buy2 = "---", buy3 = "---", below = "---", wall = "---", listed = "---",
+        below = "---", wall = "---",
+        auctions = "---", own = "---", supply = MarketTab.SupplyText(key, s.quantity),
     }
-    local labels = { buy1 = "Buy 20", buy2 = "Buy 100", buy3 = "Buy 200" }
     local OB = ns.OrderBook
     local book = OB.Get(key)
-    local note = ""
     if not book then
         if OB.IsLoading(key) then
-            v.buy1 = "loading..."
+            v.below = "loading..."
         elseif OB.Failed(key) then
-            v.buy1 = "no answer; try again in a minute"
+            v.below = "no answer; try again in a minute"
         else
-            v.buy1 = "not loaded (not during a scan)"
+            v.below = "not loaded (not during a scan)"
         end
-        return v, labels, note
+        return v, ""
     end
     local age = time() - book.t
-    note = "Order book: " .. (age < 60 and "just now" or (math.floor(age / 60) .. " min ago"))
+    local note = "Order book: " .. (age < 60 and "just now" or (math.floor(age / 60) .. " min ago"))
         .. (book.complete and "" or ", partly loaded")
     if #book.levels == 0 then
-        v.buy1 = "nothing listed with a buyout"
-        return v, labels, note
-    end
-    local counts = book.commodity and { 20, 100, 200 } or { 1, 5, 20 }
-    for i, n in ipairs(counts) do
-        labels["buy" .. i] = "Buy " .. n
-        local total, each = OB.CostToBuy(book, n)
-        if total then
-            v["buy" .. i] = ("%s (%s each)"):format(Money(total), Money(math.floor(each + .5)))
-        else
-            v["buy" .. i] = ("only %s listed"):format(Count(each))
-            break
-        end
+        v.below = "nothing listed with a buyout"
+        return v, note
     end
     if s.value then
         local below, cost = OB.BelowValue(book, s.value)
@@ -282,8 +271,39 @@ function MarketTab.RowValues(key)
     end
     local wallPrice, wallQuantity = OB.Wall(book)
     v.wall = wallPrice and ("%s at %s"):format(Count(wallQuantity), Money(wallPrice)) or "none"
-    v.listed = ("%s at %d prices"):format(Count(book.total), #book.levels)
-    return v, labels, note
+    v.auctions, v.own = MarketTab.CompetitionText(book.competition)
+    return v, note
+end
+
+local GOOD, BAD = "|cff40c040", "|cffff5050"
+
+-- "48 by 12 sellers" (12+ when some auction names fewer owners than it has)
+-- and your listings: cheapest (or tied), or undercut by how many cheaper
+-- units of others.
+function MarketTab.CompetitionText(c)
+    if not c then return "---", "---" end
+    local sellers = Count(c.sellers) .. (c.sellersMore and "+" or "")
+    local auctions = ("%s by %s %s"):format(Count(c.auctions), sellers,
+        (c.sellers == 1 and not c.sellersMore) and "seller" or "sellers")
+    local own = c.own
+    if not own then return auctions, "none" end
+    local mine = ("%s at %s"):format(Count(own.quantity), Money(own.price))
+    if not c.otherLowest or own.price <= c.otherLowest then
+        return auctions, GOOD .. "cheapest|r: " .. mine
+    end
+    -- (the value column is ~214 px: keep it short)
+    return auctions, ("%sundercut|r by %s: %s"):format(BAD, Count(c.cheaperUnits), mine)
+end
+
+-- Quantity listed now vs. the average over the last 7 days (Market.lua).
+function MarketTab.SupplyText(key, quantity)
+    if not quantity then return "---" end
+    local avg, days = ns.Market.AverageQuantity(key, 7)
+    if not avg then return Count(quantity) .. " (no average yet)" end
+    local text = ("%s vs %s avg"):format(Count(quantity), Count(math.floor(avg + .5)))
+    if avg > 0 then text = text .. " (" .. Pct((quantity - avg) / avg * 100, true) .. ")" end
+    if days < 6.5 then text = text .. (" over %.1f d"):format(days) end
+    return text
 end
 
 local function ItemNameText(key, itemID)
@@ -333,10 +353,9 @@ function MarketTab.Show(key)
         display.icon:SetTexture(icon)
     end
 
-    local values, labels, note = MarketTab.RowValues(key)
+    local values, note = MarketTab.RowValues(key)
     for rowKey, row in pairs(left.rows) do
         row.value:SetText(values[rowKey] or "---")
-        if labels[rowKey] then row.label:SetText(labels[rowKey]) end
     end
     left.note:SetText(note)
     local s = ns.Market.Stats(key)

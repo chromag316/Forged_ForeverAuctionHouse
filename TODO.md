@@ -96,11 +96,14 @@ left after costs. In order; 1-4 mostly use data already collected.
 
 1. ~~**Order book**~~ Done (`OrderBook.lua`; two lines in the Market tab; the tab
    sends the item's search itself). From the item's commodity/item search:
-   - cost to buy N (e.g. 20 / 100 / 200): total and average unit price;
+   - ~~cost to buy N (e.g. 20 / 100 / 200)~~ dropped: on Forever you buy commodities
+     by quantity and Blizzard's buy view shows the exact unit and total price;
    - units listed below market value, and what buying all of them costs;
    - the "wall": the first price level with a large quantity (where your own
      listing would sit).
-2. **Competition:**
+2. ~~**Competition:**~~ Done (`OrderBook.Competition`, `Market.AverageQuantity`; rows
+   Auctions, Your listings, Supply in the Market tab; "undercut by" counts others'
+   cheaper units):
    - number of sellers and auctions (search results carry the owners);
    - your own listings: count, price, cheapest or undercut and by how much
      (search results flag your own items);

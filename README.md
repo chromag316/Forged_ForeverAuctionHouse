@@ -131,7 +131,8 @@ Features so far:
   - Left panel (where the Sell view has its item and price inputs): the item, then rows
     with the lowest price now and how many are listed, the market value, today's
     lowest, volatility, sales velocity (estimated sold per day), the 24-hour trend, how
-    many days of data there are, and the order book (below).
+    many days of data there are (in the Sales row), the order book and the
+    competition (below).
   - Right panel (where the Sell view lists auctions, same background): a 30-day graph
     of the daily lowest price (gold), daily highest (gray), the market value (blue)
     and estimated sales per day (gray bars), with price and day labels. The refresh
@@ -139,14 +140,21 @@ Features so far:
   - **Order book**: when an item is shown, the tab asks the server for its listings
     (the same search Blizzard's buy view sends; waits for the rate limit, not while a
     scan runs) and shows:
-    - the cost to buy 20 / 100 / 200 (other items: 1 / 5 / 20): total and per item,
-      or how many are listed if fewer;
     - how many are listed below market value and what buying them all costs;
     - the wall: the first price with at least 10% (and 20+) of the listed quantity,
       where a new listing would end up;
-    - how many are listed at how many prices, and how old the order book is.
+    - how old the order book is (bottom left).
     Opening the item in Blizzard's buy view updates it too. Gear: the item level the
     lists use. Kept for the session only.
+  - **Competition** (from the same search):
+    - Auctions: how many auctions by how many sellers, you included ("12+" when an
+      auction has more owners than the server names);
+    - Your listings: how many you have at your lowest price, and whether that's the
+      cheapest (green; a tie counts) or undercut (red) by how many of others' units;
+    - Supply: the quantity listed now vs. the average over the last 7 days, with the
+      difference in %. The average is time-weighted (a quantity counts for as long as it
+      was listed) and uses daily averages for days older than 3; with less than 7
+      days of data it says over how many.
   - Only items a scan has seen can be found. The graph uses the daily summaries for
     older days and the scan detail for the last 3; between changes the last price
     carries over.

@@ -286,4 +286,19 @@ SlashCmdList.FORGEDFOREVERAH("itemkey zzz")
 eq(table.concat(printed, " ", n0 + 1):find("No tracked item matches", 1, true) ~= nil, true, "itemkey no match")
 M.Prune(base + 40 * DAY)
 eq(data.items["500:0"], nil, "summaries older than 30 days dropped, item removed")
+-- average supply over 7 days: time-weighted snapshots + daily summaries
+local today = math.floor(now / DAY)
+data.items["777:0"] = { s = { { now - 2 * DAY, 10, 100 }, { now - DAY, 10, 50 } }, d = { { today - 5, 8, 12, 80, 0 } } }
+local avg, days = M.AverageQuantity("777:0", 7, now)
+near(avg, (100 + 50 + 80) / 3, "7-day average: two detail days + one summary day")
+near(days, 3, "days of data")
+data.items["778:0"] = { s = { { now - 3600, 10, 5 } }, d = {} }
+eq(M.AverageQuantity("778:0", 7, now), nil, "under 6 hours of data: no average")
+data.items["779:0"] = { s = { { now - 10 * DAY, 10, 40 } }, d = {} }
+avg, days = M.AverageQuantity("779:0", 7, now)
+near(avg, 40, "an old snapshot still counts inside the window"); near(days, 7, "clipped to 7 days")
+data.items["780:0"] = { s = { { now - 2 * DAY, 10, 0 }, { now - DAY, 10, 30 } }, d = {} }
+near((M.AverageQuantity("780:0", 7, now)), 15, "sold-out time counts as 0")
+eq(M.AverageQuantity("nope:0", 7, now), nil, "unknown item")
+data.items["777:0"], data.items["778:0"], data.items["779:0"], data.items["780:0"] = nil, nil, nil, nil
 io.write(fails == 0 and "ALL PASS\n" or (fails .. " FAILURES\n"))

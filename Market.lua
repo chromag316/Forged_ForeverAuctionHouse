@@ -353,6 +353,39 @@ function Market.Stats(key, now)
     return stats
 end
 
+-- Average quantity listed over the last `days` days (default 7), and how
+-- many days of data that's based on; nil with less than 6 hours of data.
+-- Snapshots are only stored on change, so each one's quantity counts until
+-- the next (time-weighted); days before the detail window use the daily
+-- summaries' average quantity.
+function Market.AverageQuantity(key, days, now)
+    now = now or time()
+    days = days or 7
+    local item = data and data.items[key]
+    if not item or #item.s == 0 then return end
+    local start = now - days * DAY
+    local sum, weight = 0, 0
+    local firstDetailDay = DayOf(item.s[1][1])
+    for _, d in ipairs(item.d) do
+        if d[1] * DAY >= start - DAY and d[1] < firstDetailDay then
+            local span = math.min(DAY, (d[1] + 1) * DAY - start)
+            if span > 0 then
+                sum, weight = sum + (d[4] or 0) * span, weight + span
+            end
+        end
+    end
+    for i, s in ipairs(item.s) do
+        local t0 = math.max(s[1], start)
+        local nextSnap = item.s[i + 1]
+        local t1 = math.min(nextSnap and nextSnap[1] or now, now)
+        if t1 > t0 then
+            sum, weight = sum + (s[3] or 0) * (t1 - t0), weight + (t1 - t0)
+        end
+    end
+    if weight < DAY / 4 then return end
+    return sum / weight, weight / DAY
+end
+
 -- Per-day series for the Market tab's graph, oldest first, one entry per day
 -- for the last `days` days (today last):
 --   { day, min, max, sold }  -- min/max nil on days without a listing

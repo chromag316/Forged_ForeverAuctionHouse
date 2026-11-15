@@ -8,15 +8,17 @@ local _, ns = ...
 --
 --   book = { t = time, levels = { { price, quantity }, ... },
 --            loaded = quantity in the levels, total = quantity listed,
---            complete = all results loaded, commodity = true/false }
+--            complete = all results loaded, commodity = true/false,
+--            competition = see Competition below }
 --
 -- Prices are per unit (buyouts; bid-only auctions can't be bought out and
 -- are left out). Gear: only the item level whose price the lists use (as
 -- Market.Check).
 --
--- From a book: the cost to buy N, the units listed below market value and
--- what buying them costs, and the "wall": the first price level with a
--- large share of the quantity, where a new listing would end up.
+-- From a book: the units listed below market value and what buying them
+-- costs, and the "wall": the first price level with a large share of the
+-- quantity, where a new listing would end up. (No "cost to buy N": Forever's
+-- commodity purchase shows the exact price for any quantity itself.)
 --
 -- OrderBook.Request(key) sends the search (C_AuctionHouse.SendSearchQuery,
 -- what Blizzard's buy view sends; not a restricted call), waiting for the
@@ -45,18 +47,6 @@ end
 -- Statistics (pure; `book` as above)
 ------------------------------------------------------------------------
 
--- Cost of the cheapest `n` units: total, average unit price; nil and the
--- quantity available if fewer than `n` are loaded.
-function OrderBook.CostToBuy(book, n)
-    local total, left = 0, n
-    for _, level in ipairs(book and book.levels or {}) do
-        local take = math.min(left, level[2])
-        total, left = total + take * level[1], left - take
-        if left == 0 then return total, total / n end
-    end
-    return nil, n - left
-end
-
 -- Units listed below `value` and what buying all of them costs.
 function OrderBook.BelowValue(book, value)
     local quantity, cost = 0, 0
@@ -82,7 +72,8 @@ end
 -- Collecting from search results
 ------------------------------------------------------------------------
 
--- entries: list of { unitPrice, quantity }
+-- entries: list of { unitPrice, quantity, own = your units in it,
+--                    owners = { name, ... }, ownersTotal = number of owners }
 local function Levels(entries)
     local byPrice, levels, loaded = {}, {}, 0
     for _, e in ipairs(entries) do
@@ -102,13 +93,61 @@ local function Levels(entries)
 end
 OrderBook.Levels = Levels
 
+-- Competition from the same entries:
+--   auctions      number of auctions (search result rows)
+--   sellers       distinct seller names, you included; sellersMore: some
+--                 auction has more owners than it names, so "at least"
+--   own           your listings: { quantity, auctions, price = your lowest }
+--                 or nil (the search keeps your auctions apart, as
+--                 Blizzard's buy view does)
+--   otherLowest   the lowest price of anyone else's units
+--   cheaperUnits  others' units listed below your lowest price
+local function Competition(entries)
+    local c = { auctions = 0, sellers = 0, sellersMore = false, cheaperUnits = 0 }
+    local names = {}
+    local own = { quantity = 0, auctions = 0 }
+    local others = {}
+    for _, e in ipairs(entries) do
+        local price, quantity = e[1], e[2] or 0
+        if price and price > 0 and quantity > 0 then
+            c.auctions = c.auctions + 1
+            local listed = 0
+            for _, name in ipairs(e.owners or {}) do
+                if name ~= "" and not names[name] then
+                    names[name] = true
+                    c.sellers = c.sellers + 1
+                end
+                listed = listed + 1
+            end
+            if (e.ownersTotal or 0) > listed then c.sellersMore = true end
+            local mine = math.min(e.own or 0, quantity)
+            if mine > 0 then
+                own.quantity, own.auctions = own.quantity + mine, own.auctions + 1
+                if not own.price or price < own.price then own.price = price end
+            end
+            if quantity - mine > 0 then
+                others[#others + 1] = { price, quantity - mine }
+                if not c.otherLowest or price < c.otherLowest then c.otherLowest = price end
+            end
+        end
+    end
+    if own.quantity > 0 then
+        c.own = own
+        for _, o in ipairs(others) do
+            if o[1] < own.price then c.cheaperUnits = c.cheaperUnits + o[2] end
+        end
+    end
+    return c
+end
+OrderBook.Competition = Competition
+
 local function Store(key, entries, total, complete, commodity)
     if not key then return end
     local levels, loaded = Levels(entries)
     books[key] = {
         t = time(), levels = levels, loaded = loaded,
         total = math.max(total or 0, loaded), complete = complete and true or false,
-        commodity = commodity,
+        commodity = commodity, competition = Competition(entries),
     }
     if pending and pending.key == key then pending = nil end
     failed[key] = nil
@@ -120,7 +159,12 @@ local function OnCommodity(itemID)
     local entries = {}
     for i = 1, C_AuctionHouse.GetNumCommoditySearchResults(itemID) do
         local r = C_AuctionHouse.GetCommoditySearchResultInfo(itemID, i)
-        if r then entries[#entries + 1] = { r.unitPrice, r.quantity } end
+        if r then
+            local own = r.numOwnerItems or 0
+            if own == 0 and r.containsOwnerItem then own = r.quantity end
+            entries[#entries + 1] = { r.unitPrice, r.quantity, own = own,
+                                      owners = r.owners, ownersTotal = r.totalNumberOfOwners }
+        end
     end
     local complete = C_AuctionHouse.HasFullCommoditySearchResults(itemID)
     if #entries == 0 and not complete then return end -- nothing yet
@@ -139,7 +183,9 @@ local function OnItem(itemKey)
         local r = C_AuctionHouse.GetItemSearchResultInfo(itemKey, i)
         if r and r.buyoutAmount and r.buyoutAmount > 0 then
             local quantity = math.max(1, r.quantity or 1)
-            entries[#entries + 1] = { math.ceil(r.buyoutAmount / quantity), quantity }
+            entries[#entries + 1] = { math.ceil(r.buyoutAmount / quantity), quantity,
+                                      own = r.containsOwnerItem and quantity or 0,
+                                      owners = r.owners, ownersTotal = r.totalNumberOfOwners }
         end
     end
     local complete = C_AuctionHouse.HasFullItemSearchResults(itemKey)

@@ -371,12 +371,6 @@ local levels, loaded = OB.Levels({ { 16, 93 }, { 15, 60 }, { 15, 44 }, { 17, 4 }
 eq(#levels, 4, "levels merged by price, empty/zero dropped"); eq(levels[1][1], 15, "cheapest first"); eq(levels[1][2], 104, "same price summed")
 eq(loaded, 221, "loaded quantity")
 local book = { levels = levels, loaded = loaded }
-local total, each = OB.CostToBuy(book, 20)
-eq(total, 300, "buy 20 from the first level"); eq(each, 15, "average")
-total, each = OB.CostToBuy(book, 110)
-eq(total, 104 * 15 + 6 * 16, "buy 110 spans two levels")
-total, each = OB.CostToBuy(book, 500)
-eq(total, nil, "not enough listed"); eq(each, 221, "how many are")
 local q, cost = OB.BelowValue(book, 17)
 eq(q, 197, "below value 17: 15c and 16c levels"); eq(cost, 104 * 15 + 93 * 16, "their cost")
 eq(OB.BelowValue(book, nil), 0, "no value: none")
@@ -396,17 +390,24 @@ eq(#sentQueries, before + 1, "item search sent")
 local q1 = sentQueries[#sentQueries]
 eq(q1.itemKey.itemID, 100, "for the shown item"); eq(q1.sorts[1].sortOrder, 0, "sorted by price"); eq(q1.separate, true, "own items separate")
 -- (C_Timer runs at once here, so the 15 s timeout has already passed)
-eq(mpanel.left.rows.buy1.value.text:find("no answer", 1, true) ~= nil, true, "no answer: " .. tostring(mpanel.left.rows.buy1.value.text))
+eq(mpanel.left.rows.below.value.text:find("no answer", 1, true) ~= nil, true, "no answer: " .. tostring(mpanel.left.rows.below.value.text))
 M.Show("100:0")
 eq(#sentQueries, before + 1, "not re-sent right after no answer")
-commodityResults = { { unitPrice = 9, quantity = 30 }, { unitPrice = 10, quantity = 5 }, { unitPrice = 40, quantity = 200 } }
+commodityResults = {
+  { unitPrice = 9, quantity = 30, owners = { "Ann", "Bo" }, totalNumberOfOwners = 2 },
+  { unitPrice = 10, quantity = 5, owners = { "Me" }, totalNumberOfOwners = 1, numOwnerItems = 5, containsOwnerItem = true },
+  { unitPrice = 40, quantity = 200, owners = { "Ann" }, totalNumberOfOwners = 3 },
+}
 fire("COMMODITY_SEARCH_RESULTS_UPDATED", 100)
 local rows = mpanel.left.rows
-eq(rows.buy1.label.text, "Buy 20", "commodity: buy 20"); eq(rows.buy1.value.text, "180c (9c each)", "buy 20 value")
-eq(rows.buy2.label.text, "Buy 100", "buy 100 label"); eq(rows.buy2.value.text, "2920c (29c each)", "buy 100 value")
-eq(rows.buy3.value.text, "6920c (35c each)", "buy 200 value")
+eq(rawget(rows, "buy1"), nil, "no cost-to-buy rows"); eq(rawget(rows, "buy3"), nil, "none at all")
+eq(ns.OrderBook.CostToBuy, nil, "CostToBuy removed")
 eq(rows.wall.value.text, "30 at 9c", "wall row")
-eq(rows.listed.value.text, "235 at 3 prices", "listings row")
+eq(rows.auctions.value.text, "3 by 3+ sellers", "auctions row (an auction with unnamed owners: 3+)")
+eq(rows.own.value.text, "|cffff5050undercut|r by 30: 5 at 10c", "your listings: undercut by 30 cheaper units")
+eq(rows.supply.value.text:sub(1, 7), "235 vs ", "supply: now vs average: " .. tostring(rows.supply.value.text))
+eq(rows.sales.value.text:find("days)", 1, true) ~= nil, true, "data days in the sales row: " .. tostring(rows.sales.value.text))
+eq(rawget(rows, "listed"), nil, "no listings row"); eq(rawget(rows, "data"), nil, "no data row")
 eq(mpanel.left.note.text, "Order book: just now", "order book age note")
 eq(mpanel.count.text, "235 listed", "count left of the refresh button")
 -- refresh button: asks again even though the book is current
@@ -436,6 +437,22 @@ M.Show("100:0"); eq(#sentQueries, before + 2, "no duplicate while loading")
 now = now + 120; commodityResults = {}
 fire("COMMODITY_SEARCH_RESULTS_UPDATED", 100)
 eq(ns.OrderBook.Get("100:0") and #ns.OrderBook.Get("100:0").levels, 0, "sold out: empty book")
-eq(mpanel.left.rows.buy1.value.text, "nothing listed with a buyout", "empty book row")
+eq(mpanel.left.rows.below.value.text, "nothing listed with a buyout", "empty book row")
 C_Timer.After = realAfter
+-- competition: sellers, auctions, your listings
+local C = ns.OrderBook.Competition
+local c = C({ { 10, 5, owners = { "A" }, ownersTotal = 1 }, { 10, 3, owners = { "A" }, ownersTotal = 1 },
+              { 12, 4, owners = { "B", "Me" }, ownersTotal = 2, own = 2 }, { 0, 9, owners = { "Z" } } })
+eq(c.auctions, 3, "auctions: rows with a buyout"); eq(c.sellers, 3, "distinct sellers, you included"); eq(c.sellersMore, false, "all owners named")
+eq(c.own.quantity, 2, "your units"); eq(c.own.price, 12, "your lowest"); eq(c.otherLowest, 10, "others' lowest")
+eq(c.cheaperUnits, 8, "others' units below your price")
+local mt = ns.MarketTab
+local a1, o1 = mt.CompetitionText(c)
+eq(a1, "3 by 3 sellers", "auctions text"); eq(o1, "|cffff5050undercut|r by 8: 2 at 12c", "undercut text")
+c = C({ { 9, 2, owners = { "Me" }, ownersTotal = 1, own = 2 }, { 9, 4, owners = { "B" }, ownersTotal = 1 } })
+eq(select(2, mt.CompetitionText(c)), "|cff40c040cheapest|r: 2 at 9c", "tied counts as cheapest")
+c = C({ { 9, 4, owners = { "B" }, ownersTotal = 1 } })
+eq(select(2, mt.CompetitionText(c)), "none", "no own listings")
+eq(mt.CompetitionText(c), "1 by 1 seller", "singular seller")
+eq(mt.CompetitionText(nil), "---", "no book")
 io.write(fails == 0 and "ALL PASS\n" or (fails .. " FAILURES\n"))
