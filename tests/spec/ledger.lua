@@ -29,6 +29,7 @@ local ITEMS = {
 }
 C_Item = { GetItemInfo = function(x)
   local id = type(x) == "number" and x or tonumber(tostring(x):match("item:(%d+)"))
+  if not id then for i, t in pairs(ITEMS) do if t[1] == x then id = i end end end -- by name (cached items)
   local t = ITEMS[id]; if not t then return end
   return t[1], t[2]
 end }
@@ -147,6 +148,17 @@ eq(select(3, L.SaleResult(data.sales[3])), nil, "no cost: no profit")
 ns.Market.Data().items["300:5"] = { s = {}, d = {}, n = "Green Chest of the Eagle", nk = true }
 eq(L.KeyForName("Green Chest of the Eagle"), "300:5", "full suffixed name")
 eq(L.KeyForName("Nothing"), nil, "unknown name")
+local savedBuys = data.buys; data.buys = {}
+eq(L.KeyForName("Junk Sword"), "200:0", "no purchase or market name: the client's item cache by name")
+data.buys = savedBuys
+-- a failed purchase's quote doesn't price the next one
+local nBuys = #data.buys
+fire("COMMODITY_PRICE_UPDATED", 50, 1000)
+fire("COMMODITY_PURCHASE_FAILED")
+AuctionHouseFrame.BuyDialog = { itemID = 100, quantity = 1, PriceFrame = { GetAmount = function() return 7 end } }
+fire("COMMODITY_PURCHASE_SUCCEEDED")
+eq(data.buys[nBuys + 1] and data.buys[nBuys + 1].total, 7, "failed quote dropped: the dialog's price")
+table.remove(data.buys, nBuys + 1)
 
 -- totals and the tab's lists
 local T = L.Totals(now - 30 * DAY)

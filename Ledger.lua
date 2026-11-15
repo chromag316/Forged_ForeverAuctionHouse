@@ -112,9 +112,10 @@ function Ledger.KeyForName(name)
         end
     end
     if found then return found end
-    for key in pairs(market and market.items or {}) do
-        if key:match(":0$") and not ns.Market.Suffixed(key) and GetItemInfo(ItemID(key)) == name then return key end
-    end
+    -- The client's item cache knows items by name (only cached ones; asking
+    -- doesn't load anything).
+    local _, link = GetItemInfo(name)
+    if link then return ns.History.KeyFromLink(link) end
 end
 
 ------------------------------------------------------------------------
@@ -173,6 +174,10 @@ local quote
 ns:On("COMMODITY_PRICE_UPDATED", function(unitPrice, totalPrice)
     quote = { unit = unitPrice, total = totalPrice }
 end)
+
+-- A failed purchase's quote mustn't price the next one.
+ns:On("COMMODITY_PURCHASE_FAILED", function() quote = nil end)
+ns:On("COMMODITY_PRICE_UNAVAILABLE", function() quote = nil end)
 
 ns:On("COMMODITY_PURCHASE_SUCCEEDED", function()
     local dialog = AuctionHouseFrame and AuctionHouseFrame.BuyDialog

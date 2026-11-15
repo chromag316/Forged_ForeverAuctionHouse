@@ -457,10 +457,15 @@ local function AddToBucket(list, index, ratio, quantity, day)
     b[4] = day
 end
 
--- Block of the day (1-8) and weekday (1 = Monday) of time `t`, local time.
+-- Block of the day (1-8) and weekday (1 = Monday) of time `t`, local time
+-- (the last one remembered: a scan stores thousands of items at one time).
+local slotsFor, slotBlock, slotDay
 function Market.TimingSlots(t)
-    local d = date("*t", t)
-    return math.floor(d.hour / TIMING_BLOCK_HOURS) + 1, (d.wday + 5) % 7 + 1
+    if t ~= slotsFor then
+        local d = date("*t", t)
+        slotsFor, slotBlock, slotDay = t, math.floor(d.hour / TIMING_BLOCK_HOURS) + 1, (d.wday + 5) % 7 + 1
+    end
+    return slotBlock, slotDay
 end
 
 function Market.RecordTiming(item, key, t, price, quantity)
