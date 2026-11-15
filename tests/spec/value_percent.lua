@@ -67,10 +67,14 @@ local function newRow(cells, rowData)
 end
 
 local browseSB, commSB, itemSB = newScrollBox(), newScrollBox(), newScrollBox()
+local sellCommSB, sellItemSB = newScrollBox(), newScrollBox()
 AuctionHouseFrame = {
   BrowseResultsFrame = { ItemList = { ScrollBox = browseSB } },
   CommoditiesBuyFrame = { ItemList = { ScrollBox = commSB } },
   ItemBuyFrame = { ItemList = { ScrollBox = itemSB } },
+  -- the Sell view's lists are item lists themselves
+  CommoditiesSellList = { ScrollBox = sellCommSB },
+  ItemSellList = { ScrollBox = sellItemSB },
 }
 C_Item = { GetItemInfo = function() end }
 
@@ -153,6 +157,17 @@ eq(irow.fahPercent.justify, "RIGHT", "item list right-aligned")
 -- no buyout: hidden
 init(itemSB, irow, { itemKey = { itemID = 15210, itemSuffix = 1182 }, bidAmount = 500, quantity = 1 }, 2)
 eq(irow.fahPercent.shown, false, "bid-only hidden")
+
+-- Sell view lists: same % as the buy lists
+eq(type(sellCommSB.cb), "function", "sell commodity list hooked")
+eq(type(sellItemSB.cb), "function", "sell item list hooked")
+local srow = newRow({ unitCell, qtyCell }, nil)
+init(sellCommSB, srow, { itemID = 2589, unitPrice = 200, quantity = 5 }, 1)
+eq(srow.fahPercent.text, "|cffff0000200%|r", "sell commodity list: 200%")
+eq(srow.fahPercent.point[2], unitCell.MoneyDisplay, "right of the unit price")
+local sirow = newRow({ bidCell, buyCell }, nil)
+init(sellItemSB, sirow, { itemKey = { itemID = 15210, itemSuffix = 1182 }, buyoutAmount = 5000, quantity = 1 }, 1)
+eq(sirow.fahPercent.text, "|cff16ff1650%|r", "sell item list: 50% (green: blue is under 50)")
 
 -- owner-style callback (owner, frame, elementData)
 local row3 = newRow({ priceCell }, nil)

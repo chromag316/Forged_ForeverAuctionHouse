@@ -8,6 +8,8 @@ local _, ns = ...
 --   Browse results  min price      text in the left part of the Price cell
 --   Commodity list  unit price     text right of the unit price
 --   Item list       buyout / qty   text right of the buyout price
+-- The commodity and item lists are on the Buy view (an item's auctions) and
+-- on the Sell view (the auctions of the item you're posting).
 --
 -- How: Blizzard's lists are ScrollBoxes whose rows are (re)initialized as
 -- you scroll. After Blizzard fills a row, we read its rowData and set our
@@ -215,12 +217,17 @@ ns:Listen("AUCTION_UI_LOADED", function(frame)
     local browse = frame.BrowseResultsFrame and frame.BrowseResultsFrame.ItemList
     local commodities = frame.CommoditiesBuyFrame and frame.CommoditiesBuyFrame.ItemList
     local items = frame.ItemBuyFrame and frame.ItemBuyFrame.ItemList
+    -- The Sell view's lists of current auctions: the same kinds of results
+    -- (commodity / item search), in lists that are item lists themselves.
+    local sellCommodities = type(frame.CommoditiesSellList) == "table" and frame.CommoditiesSellList or nil
+    local sellItems = type(frame.ItemSellList) == "table" and frame.ItemSellList or nil
     -- Each list on its own, so a problem with one doesn't stop the others.
-    for _, entry in ipairs({ { browse, BrowseRow }, { commodities, CommodityRow }, { items, ItemRow } }) do
+    for _, entry in ipairs({ { browse, BrowseRow }, { commodities, CommodityRow }, { items, ItemRow },
+                             { sellCommodities, CommodityRow }, { sellItems, ItemRow } }) do
         local ok, err = pcall(Watch, entry[1], entry[2])
         if not ok then geterrorhandler()(err) end
     end
-    lists = { browse, commodities, items }
+    lists = { browse, commodities, items, sellCommodities, sellItems }
 end)
 
 -- Redraws the visible rows (after toggling).

@@ -72,7 +72,23 @@ Features so far:
   - Commodity auctions: the unit price, shown right after the price, right-aligned so
     the numbers line up, in the same font as the quantity numbers.
   - Item auctions: the buyout per item, shown the same way right after the buyout price.
+  - The commodity and item auction lists on the Sell view (the auctions of the item
+    you're posting) show it the same way.
   - Nothing is shown for items without a market value yet.
+
+- **Sell view: % and revenue**: on Blizzard's sell form (`SellInfo.lua`):
+  - right of the Unit Price input, the price you entered as a % of the item's market
+    value (colored like the lists);
+  - right of the Total Price, what a vendor pays for the same quantity ("Vendor: 12c",
+    "Vendor: none" if vendors don't buy it), in green when that's at least what the
+    auction house gives you if it sells (after the cut);
+  - a **Revenue** row below the Create Auction button: what you get if it sells (the
+    total price minus the 5% auction house cut; the deposit is refunded when an
+    auction sells) and what you lose if it doesn't (the deposit), e.g. "9c if it
+    sells, -1s if not".
+  - Nothing is added to Blizzard's form itself (it posts auctions, a restricted
+    call): the text is on the addon's own frame, placed against Blizzard's rows, and
+    only reads what the form shows.
   - `/fah percent` turns it on or off.
   - **Experimental: sortable % column.** `/fah percent column` (then `/reload`) adds a
     "%" column right after Price in the browse results. Click its header to sort by %

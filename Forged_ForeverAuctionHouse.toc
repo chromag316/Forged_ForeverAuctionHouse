@@ -17,6 +17,7 @@ Tooltip.lua
 ValuePercent.lua
 PercentColumn.lua
 PercentColumn.xml
+SellInfo.lua
 Strategy.lua
 Tabs.lua
 StrategyTab.lua
