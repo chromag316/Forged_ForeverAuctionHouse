@@ -172,6 +172,16 @@ Features so far:
       difference in %. The average is time-weighted (a quantity counts for as long as it
       was listed) and uses daily averages for days older than 3; with less than 7
       days of data it covers what there is (the Sales row shows how many days).
+  - **Timing** (the right panel's "Timing" header; "Price History" switches back):
+    - 7-day and 30-day average of the daily lowest price, with today's price vs. it
+      ("50c (now +20%)"; "over 3 days" while there's less data than the period).
+    - The lowest price by time of day (3-hour blocks, your local time) and by day of
+      week, as bars around the item's usual level: green below it (a time to buy),
+      red above (a time to sell); faint with fewer than 2 scans behind them. Below:
+      when it's cheapest and when the most is listed.
+    - Collected by every scan (starting with the version that added it): the price relative to the market
+      value (so a trend doesn't look like a time pattern) and the quantity, per item.
+      Older scans count less (half every 10 days); nothing older than 30 days.
   - **Profit after costs** (under the graph):
     - Flip margin: buying at the lowest price and reselling at market value, after the
       5% cut, per unit and in % of the buy price (green a profit, red a loss).

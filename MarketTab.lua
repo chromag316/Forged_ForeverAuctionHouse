@@ -13,6 +13,8 @@ local _, ns = ...
 --   gray line   daily highest price
 --   blue line   market value (price history)
 --   gray bars   estimated sales per day
+-- or (header "Timing") the 7- and 30-day averages and the price by time of
+-- day and weekday (Market.Timing);
 -- and under the graph, profit after costs: flip margin, deposit and its
 -- expected loss, break-even buy price, vendor and disenchant values.
 -- Data: Market.lua (daily summaries for 30 days, scan snapshots for 3 days)
@@ -418,6 +420,184 @@ function MarketTab.DepositPerUnit(key, duration)
     return nil, commodity
 end
 
+------------------------------------------------------------------------
+-- Timing: the right panel's second view (header "Timing")
+------------------------------------------------------------------------
+
+local HISTORY_HEADER_WIDTH = 170
+local CHART_HEIGHT = 40
+local BLOCK_LABELS = { "0-3", "3-6", "6-9", "9-12", "12-15", "15-18", "18-21", "21-24" }
+local DAY_LABELS = { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" }
+local MIN_SCALE = 0.05     -- bars: +-5% fills half the chart at least
+local NEUTRAL = 0.02       -- within +-2%: gray
+local FEW_SAMPLES = 2      -- dimmed below 2 scans
+local view = "history"
+
+local function Shown(region, show)
+    if show then region:Show() else region:Hide() end
+end
+
+-- An average of the daily lowest price: "52c (now +15%)", with the days
+-- behind it when fewer than the period ("52c over 3 days (now +15%)").
+function MarketTab.AverageText(avg, days, period, price)
+    if not avg then return "---" end
+    local text = Money(avg)
+    if days < period then text = text .. (" over %d %s"):format(days, days == 1 and "day" or "days") end
+    if price and avg > 0 then text = text .. (" (now %s)"):format(Pct((price - avg) / avg * 100, true)) end
+    return text
+end
+
+-- "Cheapest at 3-6 h and on Tue; most listed at 18-21 h and on Sun." from
+-- Market.Timing (each part needs two slots with data to compare).
+function MarketTab.TimingSummary(t)
+    local function best(slots, labels, field, lowest)
+        local found, value, count = nil, nil, 0
+        for i, slot in pairs(slots) do
+            count = count + 1
+            local v = slot[field]
+            if not value or (lowest and v < value) or (not lowest and v > value) then found, value = i, v end
+        end
+        if count >= 2 then return labels[found] end
+    end
+    local function part(prefix, field, lowest)
+        local hour = best(t.hours, BLOCK_LABELS, field, lowest)
+        local day = best(t.days, DAY_LABELS, field, lowest)
+        if hour and day then return ("%s at %s h and on %s"):format(prefix, hour, day) end
+        if hour then return ("%s at %s h"):format(prefix, hour) end
+        if day then return ("%s on %s"):format(prefix, day) end
+    end
+    local cheap, listed = part("Cheapest", "price", true), part("most listed", "quantity", false)
+    if not cheap then return "" end
+    return cheap .. (listed and ("; " .. listed) or "") .. "."
+end
+
+local function Chart(parent, labels)
+    local chart = CreateFrame("Frame", nil, parent)
+    chart:SetHeight(CHART_HEIGHT)
+    local base = chart:CreateTexture(nil, "BORDER")
+    base:SetColorTexture(1, 1, 1, .15)
+    base:SetHeight(1)
+    base:SetPoint("LEFT", chart, "LEFT", 0, 0)
+    base:SetPoint("RIGHT", chart, "RIGHT", 0, 0)
+    chart.bars = {}
+    for i, text in ipairs(labels) do
+        local bar = chart:CreateTexture(nil, "ARTWORK")
+        local label = chart:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+        label:SetText(text)
+        local pct = chart:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        chart.bars[i] = { bar = bar, label = label, pct = pct }
+    end
+    return chart
+end
+
+-- Bars around the middle line: up = pricier than usual, down = cheaper.
+local function DrawChart(chart, slots)
+    local n = #chart.bars
+    local width = chart:GetWidth()
+    local scale = MIN_SCALE
+    for _, slot in pairs(slots) do scale = math.max(scale, math.abs(slot.price - 1)) end
+    for i, b in ipairs(chart.bars) do
+        local x = (i - .5) / n * width
+        b.label:ClearAllPoints()
+        b.label:SetPoint("TOP", chart, "BOTTOMLEFT", x, -2)
+        b.pct:ClearAllPoints()
+        b.pct:SetPoint("TOP", b.label, "BOTTOM", 0, -1)
+        local slot = slots[i]
+        if slot then
+            local dev = slot.price - 1
+            local color = dev < -NEUTRAL and { .25, .75, .25 } or dev > NEUTRAL and { 1, .31, .31 } or BAR_COLOR
+            local alpha = slot.weight < FEW_SAMPLES and .35 or .9
+            b.bar:SetColorTexture(color[1], color[2], color[3], alpha)
+            b.bar:ClearAllPoints()
+            b.bar:SetSize(math.max(4, width / n - 8), math.max(1, math.abs(dev) / scale * CHART_HEIGHT / 2))
+            b.bar:SetPoint(dev >= 0 and "BOTTOM" or "TOP", chart, "LEFT", x, 0)
+            b.bar:Show()
+            local text = Pct(dev * 100, true)
+            if dev < -NEUTRAL then text = GOOD .. text .. "|r" elseif dev > NEUTRAL then text = BAD .. text .. "|r" end
+            b.pct:SetText(text)
+        else
+            b.bar:Hide()
+            b.pct:SetText("---")
+        end
+    end
+end
+
+local function BuildTiming(right)
+    local timing = CreateFrame("Frame", nil, right)
+    timing:SetPoint("TOPLEFT", right, "TOPLEFT", 12, -19 - 10)
+    timing:SetPoint("BOTTOMRIGHT", right, "BOTTOMRIGHT", -16, PROFIT_HEIGHT + 8)
+
+    timing.rows = {}
+    for i, r in ipairs({ { "avg7", "7-day average" }, { "avg30", "30-day average" } }) do
+        local label = timing:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetWidth(LABEL_WIDTH)
+        label:SetJustifyH("RIGHT")
+        label:SetPoint("TOPLEFT", timing, "TOPLEFT", 0, -(i - 1) * PROFIT_STEP)
+        label:SetText(r[2])
+        local value = timing:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        value:SetJustifyH("LEFT")
+        value:SetWordWrap(false)
+        value:SetPoint("LEFT", label, "RIGHT", 18, 0)
+        value:SetPoint("RIGHT", timing, "RIGHT", 0, 0)
+        timing.rows[r[1]] = { label = label, value = value }
+    end
+
+    local function Section(text, y, labels)
+        local title = timing:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        title:SetPoint("TOPLEFT", timing, "TOPLEFT", 4, y)
+        title:SetText(text)
+        local chart = Chart(timing, labels)
+        chart:SetPoint("TOPLEFT", timing, "TOPLEFT", 4, y - 14)
+        chart:SetPoint("TOPRIGHT", timing, "TOPRIGHT", -4, y - 14)
+        return chart
+    end
+    timing.hours = Section("Lowest price by time of day (hours, your local time)", -48, BLOCK_LABELS)
+    timing.days = Section("Lowest price by day of week", -48 - 92, DAY_LABELS)
+
+    timing.summary = timing:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    timing.summary:SetPoint("BOTTOMLEFT", timing, "BOTTOMLEFT", 4, 14)
+    timing.summary:SetPoint("RIGHT", timing, "RIGHT", 0, 0)
+    timing.summary:SetJustifyH("LEFT")
+    timing.note = timing:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    timing.note:SetPoint("BOTTOMLEFT", timing, "BOTTOMLEFT", 4, 0)
+    timing.note:SetPoint("RIGHT", timing, "RIGHT", 0, 0)
+    timing.note:SetJustifyH("LEFT")
+    timing:Hide()
+    return timing
+end
+
+function MarketTab.DrawTiming(key)
+    local timing = panel.graph.timing
+    local s = ns.Market.Stats(key)
+    local a7, n7, a30, n30 = ns.Market.PriceAverages(key)
+    local price = s.listed and s.price or nil
+    timing.rows.avg7.value:SetText(MarketTab.AverageText(a7, n7, 7, price))
+    timing.rows.avg30.value:SetText(MarketTab.AverageText(a30, n30, DAYS, price))
+    local t = ns.Market.Timing(key)
+    DrawChart(timing.hours, t.hours)
+    DrawChart(timing.days, t.days)
+    timing.summary:SetText(MarketTab.TimingSummary(t))
+    local scans = math.floor(t.samples + .5)
+    if scans == 0 then
+        timing.note:SetText("No timing data yet: every scan from now on adds to it.")
+    else
+        timing.note:SetText(("Vs. its usual level, from ~%s %s (recent ones count most)."):format(
+            Count(scans), scans == 1 and "scan" or "scans"))
+    end
+end
+
+-- "history" (price graph) or "timing"
+function MarketTab.SetView(v)
+    view = v
+    local g = panel.graph
+    if v == "timing" then
+        g.timingHeader:LockHighlight(); g.header:UnlockHighlight()
+    else
+        g.header:LockHighlight(); g.timingHeader:UnlockHighlight()
+    end
+    MarketTab.Show(selectedKey)
+end
+
 -- Values for the profit rows:
 --   flip        lowest price to market value after the 5% cut, per unit
 --   deposit     per unit for the sell view's duration, and the expected
@@ -508,13 +688,16 @@ function MarketTab.Show(key)
         graph.legend:Hide()
         graph.empty:Hide()
         graph.profit:Hide()
+        graph.timing:Hide()
         panel.count:SetText("")
         return
     end
     panel.hint:Hide()
     left.content:Show()
-    graph.plot:Show()
-    graph.legend:Show()
+    local history = view ~= "timing"
+    Shown(graph.plot, history)
+    Shown(graph.legend, history)
+    Shown(graph.timing, not history)
     graph.profit:Show()
 
     local itemID = tonumber(key:match("^(%d+)"))
@@ -544,7 +727,12 @@ function MarketTab.Show(key)
     end
     local s = ns.Market.Stats(key)
     panel.count:SetText(s.listed and (Count(s.quantity or 0) .. " listed") or "")
-    DrawGraph(key)
+    if history then
+        DrawGraph(key)
+    else
+        graph.empty:Hide()
+        MarketTab.DrawTiming(key)
+    end
 end
 
 -- The shown item's order book changed (or its request ended): redraw.
@@ -731,25 +919,36 @@ local function BuildRight(frame, left)
     end)
     right.bg, right.border = bg, border
 
-    -- Header row (4, -1) to (-26, -1), 19 high: one Blizzard header button.
+    -- Header row (4, -1) to (-26, -1), 19 high: Blizzard header buttons
+    -- switching between the price history and the timing view (the shown
+    -- one highlighted).
     local headers = CreateFrame("Frame", nil, right)
     headers:SetPoint("TOPLEFT", 4, -1)
     headers:SetPoint("TOPRIGHT", -26, -1)
     headers:SetHeight(19)
-    local ok, header = pcall(CreateFrame, "Button", nil, headers, "AuctionHouseTableHeaderStringTemplate")
-    if not ok then
-        header = CreateFrame("Button", nil, headers)
-        local fs = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        fs:SetPoint("LEFT", 8, 0)
-        header:SetFontString(fs)
+    local function Header(text, view)
+        local ok, header = pcall(CreateFrame, "Button", nil, headers, "AuctionHouseTableHeaderStringTemplate")
+        if not ok then
+            header = CreateFrame("Button", nil, headers)
+            local fs = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            fs:SetPoint("LEFT", 8, 0)
+            header:SetFontString(fs)
+        end
+        header:SetScript("OnClick", function()
+            PlaySound(SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or 856)
+            MarketTab.SetView(view)
+        end)
+        if type(header.Arrow) == "table" and header.Arrow.Hide then header.Arrow:Hide() end
+        header:SetText(text)
+        return header
     end
-    header:SetScript("OnClick", nil)
-    if header.SetEnabled then header:SetEnabled(false) end
-    if type(header.Arrow) == "table" and header.Arrow.Hide then header.Arrow:Hide() end
-    header:SetPoint("TOPLEFT")
-    header:SetPoint("BOTTOMRIGHT")
-    header:SetText("Price History (30 days)")
-    right.header = header
+    right.header = Header("Price History (30 days)", "history")
+    right.header:SetPoint("TOPLEFT")
+    right.header:SetPoint("BOTTOMLEFT")
+    right.header:SetWidth(HISTORY_HEADER_WIDTH)
+    right.timingHeader = Header("Timing", "timing")
+    right.timingHeader:SetPoint("TOPLEFT", right.header, "TOPRIGHT", -2, 0)
+    right.timingHeader:SetPoint("BOTTOMRIGHT")
 
     -- The graph inside the list area (price labels on the left, day labels
     -- below, the legend at the top).
@@ -798,6 +997,9 @@ local function BuildRight(frame, left)
     end
     profit:Hide()
     right.profit = profit
+
+    right.timing = BuildTiming(right)
+    right.header:LockHighlight()
 
     -- Refresh button like the Sell list's: RIGHT of a 200x20 refresh frame at
     -- the list's TOPRIGHT (-4, +30). Asks the server for the order book again.

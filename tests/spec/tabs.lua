@@ -533,4 +533,38 @@ eq(profit.rows.flip.label.text, "Flip margin", "profit rows under the graph")
 eq(profit.rows.breakeven.label.text, "Break-even buy", "break-even row")
 eq(mpanel.graph.plot.points[2][3], 26 + 5 * 20 + 22, "graph ends above the profit box")
 eq(profit.points[1][1], "BOTTOMLEFT", "box at the panel's bottom")
+-- timing view: averages, summary, switching from the price history
+eq(MT.AverageText(50, 7, 7, 60), "50c (now +20%)", "average vs. now")
+eq(MT.AverageText(50, 3, 30, nil), "50c over 3 days", "fewer days than the period, not listed")
+eq(MT.AverageText(50, 1, 7, 40), "50c over 1 day (now -20%)", "one day")
+eq(MT.AverageText(nil, 0, 7, 40), "---", "no average")
+local tm = { hours = { [2] = { price = 0.9, quantity = 0.5 }, [7] = { price = 1.1, quantity = 1.5 } },
+             days = { [2] = { price = 0.95, quantity = 2 }, [7] = { price = 1.05, quantity = 0.2 } } }
+eq(MT.TimingSummary(tm), "Cheapest at 3-6 h and on Tue; most listed at 18-21 h and on Tue.", "summary")
+tm.days = { [3] = { price = 1, quantity = 1 } }
+eq(MT.TimingSummary(tm), "Cheapest at 3-6 h; most listed at 18-21 h.", "one weekday: hours only")
+eq(MT.TimingSummary({ hours = {}, days = {} }), "", "no data: no summary")
+local g = mpanel.graph
+eq(g.header.text, "Price History (30 days)", "history header"); eq(g.timingHeader.text, "Timing", "timing header")
+M.Show("100:0")
+eq(g.plot.shown, true, "history view by default"); eq(g.timing.shown, false, "timing hidden")
+g.timingHeader.scripts.OnClick()
+eq(g.timing.shown, true, "timing view shown"); eq(g.plot.shown, false, "graph hidden"); eq(g.legend.shown, false, "legend hidden")
+eq(g.profit.shown, true, "profit box stays")
+eq(g.timing.rows.avg7.label.text, "7-day average", "7-day row")
+eq(g.timing.rows.avg30.label.text, "30-day average", "30-day row")
+eq(g.timing.note.text, "No timing data yet: every scan from now on adds to it.", "no timing yet")
+eq(#g.timing.hours.bars, 8, "8 time-of-day bars"); eq(#g.timing.days.bars, 7, "7 weekday bars")
+eq(g.timing.hours.bars[1].pct.text, "---", "empty slot")
+local realTiming = ns.Market.Timing
+ns.Market.Timing = function() return { hours = { [1] = { price = 0.8, quantity = 1, weight = 5 }, [2] = { price = 1.2, quantity = 1, weight = 1 } }, days = {}, samples = 6 } end
+M.Show("100:0")
+eq(g.timing.hours.bars[1].pct.text, "|cff40c040-20%|r", "cheaper slot in green")
+eq(g.timing.hours.bars[2].pct.text, "|cffff5050+20%|r", "pricier slot in red")
+eq(g.timing.note.text, "Vs. its usual level, from ~6 scans (recent ones count most).", "scans note")
+ns.Market.Timing = realTiming
+g.header.scripts.OnClick()
+eq(g.plot.shown, true, "back to the history"); eq(g.timing.shown, false, "timing hidden again")
+M.Show(nil)
+eq(g.timing.shown, false, "no item: no timing")
 io.write(fails == 0 and "ALL PASS\n" or (fails .. " FAILURES\n"))

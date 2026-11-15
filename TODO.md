@@ -122,7 +122,9 @@ left after costs. In order; 1-4 mostly use data already collected.
      from the sell-through rate;
    - break-even buy price;
    - floor and ceiling: vendor sell price, vendor buy price, disenchant value.
-5. **Timing** (needs new data: hourly / weekday averages kept for 30 days, today
+5. ~~**Timing**~~ Done (`Market.Timing`, `Market.PriceAverages`; the Market tab's
+   "Timing" view; scans record 3-hour and weekday buckets per item, decaying by half
+   every 10 days) (needs new data: hourly / weekday averages kept for 30 days, today
    only 3 days of detail):
    - price and supply by time of day and day of week: when to buy, when to sell;
    - 7-day and 30-day averages next to today's price.

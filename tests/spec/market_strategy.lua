@@ -59,7 +59,10 @@ end
 local M = ns.Market
 local data = M.Data()
 
--- snapshots and dedupe
+-- snapshots and dedupe (no market value during these scans: the stats
+-- below write price history directly, past History.Value's cache)
+local realValue = ns.History.Value
+ns.History.Value = function() end
 scan({ { 100, 10, 50 }, { 200, 100, 3 } })
 eq(#data.items["100:0"].s, 1, "first snapshot")
 now = now + 3 * 3600; scan({ { 100, 10, 50 }, { 200, 100, 3 } })
@@ -80,6 +83,7 @@ now = now + 3 * 3600; scan({ { 100, 12, 30 }, { 100, 9, 5 }, { 200, 100, 3 }, { 
 local l100 = data.items["100:0"].s[#data.items["100:0"].s]
 eq(l100[2], 9, "lowest price across item levels"); eq(l100[3], 35, "summed quantity")
 
+ns.History.Value = realValue
 -- stats
 -- earlier days of price history: market value 20 (today's minimum is 9)
 ns.db.history["Realm|Alliance"]["100:0"].data_points = { { value = 20, time = now - DAY }, { value = 20, time = now - 2 * DAY } }
@@ -308,4 +312,57 @@ data.scans = { now - 2 * DAY, now - 20 * 3600, now - 3600, now }
 eq(M.Stats("790:0", now).scans, 3, "scans since first seen")
 data.scans = savedScans
 data.items["790:0"] = nil
+-- timing: buckets by 3-hour block and weekday (the client's local time)
+local d = os.date("*t", now)
+local block, weekday = M.TimingSlots(now)
+eq(block, math.floor(d.hour / 3) + 1, "3-hour block of the local time")
+eq(weekday, (d.wday + 5) % 7 + 1, "weekday, Monday = 1")
+local realValue2 = ns.History.Value
+ns.History.Value = function() return 100 end
+local ti = { s = {}, d = {} }
+data.items["800:0"] = ti
+M.RecordTiming(ti, "800:0", now, 90, 10)
+M.RecordTiming(ti, "800:0", now, 110, 30)
+eq(ti.tm.h[block][1], 2, "price ratios added"); eq(ti.tm.h[block][2], 2, "two samples")
+eq(ti.tm.h[block][3], 40, "quantities added"); eq(ti.tm.w[weekday][2], 2, "weekday bucket too")
+M.RecordTiming(ti, "800:0", now, 5000, 10)
+eq(ti.tm.h[block][2], 2, "absurd price (50x value) ignored")
+M.RecordTiming(ti, "800:0", now, 90, 0)
+eq(ti.tm.h[block][2], 2, "nothing listed: no sample")
+-- decay: 10 days later the old samples count half
+local b = ti.tm.h[block]
+local oldDay = b[4]
+b[4] = oldDay - 10
+M.RecordTiming(ti, "800:0", now, 100, 10)
+eq(b[2], 2, "2 samples halved after 10 days + 1 new"); eq(b[1], 2, "ratio sum: 1 + 1")
+-- relative to the usual level: another block 20% cheaper
+local other = block % 8 + 1
+ti.tm.h[other] = { 0.8 * 2, 2, 20, oldDay }
+local t = M.Timing("800:0", now)
+near(t.hours[block].price, 1 / 0.9, "block at 1.0 vs. the average 0.9")
+near(t.hours[other].price, 0.8 / 0.9, "cheaper block")
+eq(t.hours[(other % 8) + 1] == nil or (other % 8) + 1 == block, true, "no data: no slot")
+near(t.samples, 4, "scans counted")
+-- pruning: buckets not updated for 30 days go
+ti.tm.h[other][4] = oldDay - 40
+M.PruneTiming(ti, oldDay - 30)
+eq(ti.tm.h[other], nil, "old bucket dropped"); eq(ti.tm.h[block] ~= nil, true, "recent kept")
+ti.tm = { h = { { 1, 1, 1, oldDay - 40 } }, w = {} }
+M.PruneTiming(ti, oldDay - 30)
+eq(ti.tm, nil, "nothing left: timing removed")
+eq(M.Timing("800:0", now).samples, 0, "no timing: no samples")
+-- storing a scan records timing for what it saw
+M.Store(now, { ["800:0"] = { p = 80, q = 5, lvl = 0 } }, false)
+eq(ti.tm ~= nil and ti.tm.h[block][2], 1, "scan adds a timing sample")
+ns.History.Value = realValue2
+data.items["800:0"] = nil
+-- 7- and 30-day averages of the daily lowest price
+local pa = { s = { { now - 2 * DAY, 10, 5 }, { now - DAY, 20, 5 } }, d = { { math.floor(now / DAY) - 20, 40, 50, 5, 0 } } }
+data.items["810:0"] = pa
+local a7, n7, a30, n30 = M.PriceAverages("810:0", now)
+-- detail: day-2 10, day-1 10 and 20, today 20 (carried over): lows 10, 10, 20
+near(a7, 40 / 3, "7-day average of daily lows"); eq(n7, 3, "3 listed days in the last 7")
+near(a30, 80 / 4, "30-day average includes the summary day"); eq(n30, 4, "4 listed days")
+data.items["810:0"] = nil
+eq(M.PriceAverages("811:0", now), nil, "no data: no average")
 io.write(fails == 0 and "ALL PASS\n" or (fails .. " FAILURES\n"))

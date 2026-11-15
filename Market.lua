@@ -20,6 +20,7 @@ local _, ns = ...
 --         ik = { itemID, itemLevel, itemSuffix, ... }, -- cheapest variant's item key
 --         n = name, nq = quality, nk = true?    -- item name (see Item names)
 --         d = { { day, min, max, avgQty, sold }, ... }, -- daily summaries
+--         tm = { h = {...}, w = {...} },        -- by time of day / weekday (see Timing)
 --     } },
 --   }
 --
@@ -119,6 +120,7 @@ function Market.Store(t, seen, complete)
             item.ik = ik
         end
         item.chk = nil -- the scan is newer than any checked price
+        Market.RecordTiming(item, key, t, v.p, v.q)
     end
     if complete then
         for key, item in pairs(data.items) do
@@ -250,6 +252,7 @@ function Market.Prune(now)
         end
         table.sort(item.d, function(a, b) return a[1] < b[1] end)
         while item.d[1] and item.d[1][1] < summaryCutoff do table.remove(item.d, 1) end
+        Market.PruneTiming(item, summaryCutoff)
         -- Drop items with nothing recent left: no summaries, and the last
         -- snapshot either says "gone" and is past the detail window, or is
         -- older than the summary window.
@@ -392,6 +395,131 @@ function Market.AverageQuantity(key, days, now)
     end
     if weight < DAY / 4 then return end
     return sum / weight, weight / DAY
+end
+
+-- Average of the daily lowest price over the last 7 and 30 days (days the
+-- item was listed): avg7, days7, avg30, days30 (nil without a listed day).
+function Market.PriceAverages(key, now)
+    local series = Market.DailySeries(key, SUMMARY_DAYS, now)
+    local function avg(n)
+        local sum, count = 0, 0
+        for i = math.max(1, #series - n + 1), #series do
+            local e = series[i]
+            if e.min then sum, count = sum + e.min, count + 1 end
+        end
+        if count > 0 then return sum / count, count end
+    end
+    local a7, n7 = avg(7)
+    local a30, n30 = avg(SUMMARY_DAYS)
+    return a7, n7, a30, n30
+end
+
+------------------------------------------------------------------------
+-- Timing: price and quantity by time of day and day of week
+------------------------------------------------------------------------
+-- Every scan adds the item's lowest price (relative to its market value,
+-- so a price trend doesn't show up as a time pattern) and quantity to two
+-- buckets: the 3-hour block of the day and the weekday it ran in (the
+-- client's local time).
+--
+--   item.tm = { h = { [1-8] = bucket },   -- 1 = 0-3 h ... 8 = 21-24 h
+--               w = { [1-7] = bucket } }  -- 1 = Monday ... 7 = Sunday
+--   bucket = { price ratio sum, samples, quantity sum, day of last update }
+--
+-- Sums decay by half every 10 days, so roughly the last 30 days count;
+-- buckets not updated for 30 days are dropped.
+
+local TIMING_HALF_LIFE = 10
+local TIMING_BLOCK_HOURS = 3
+local MAX_RATIO = 10 -- ignore absurd listings (10x the market value)
+
+Market.TIMING_BLOCKS = 24 / TIMING_BLOCK_HOURS
+
+local function Round(x, places)
+    local m = 10 ^ places
+    return math.floor(x * m + .5) / m
+end
+
+local function DecayFactor(bucketDay, day)
+    return 0.5 ^ (math.max(0, day - bucketDay) / TIMING_HALF_LIFE)
+end
+
+local function AddToBucket(list, index, ratio, quantity, day)
+    local b = list[index]
+    if not b then
+        b = { 0, 0, 0, day }
+        list[index] = b
+    end
+    local f = DecayFactor(b[4], day)
+    b[1] = Round(b[1] * f + ratio, 3)
+    b[2] = Round(b[2] * f + 1, 3)
+    b[3] = Round(b[3] * f + quantity, 1)
+    b[4] = day
+end
+
+-- Block of the day (1-8) and weekday (1 = Monday) of time `t`, local time.
+function Market.TimingSlots(t)
+    local d = date("*t", t)
+    return math.floor(d.hour / TIMING_BLOCK_HOURS) + 1, (d.wday + 5) % 7 + 1
+end
+
+function Market.RecordTiming(item, key, t, price, quantity)
+    local value = ns.History.Value(key)
+    if not (price and value and value > 0 and quantity and quantity > 0) then return end
+    local ratio = price / value
+    if ratio > MAX_RATIO then return end
+    local block, weekday = Market.TimingSlots(t)
+    local day = DayOf(t)
+    item.tm = item.tm or {}
+    item.tm.h = item.tm.h or {}
+    item.tm.w = item.tm.w or {}
+    AddToBucket(item.tm.h, block, ratio, quantity, day)
+    AddToBucket(item.tm.w, weekday, ratio, quantity, day)
+end
+
+function Market.PruneTiming(item, cutoffDay)
+    local tm = item.tm
+    if not tm then return end
+    local any = false
+    for _, list in pairs(tm) do
+        for i, b in pairs(list) do
+            if b[4] < cutoffDay then list[i] = nil else any = true end
+        end
+    end
+    if not any then item.tm = nil end
+end
+
+-- An item's timing: { hours = { [block] = slot }, days = { [weekday] = slot },
+-- samples = scans counted (decayed) }, slot = { price, quantity, weight }:
+-- price and quantity relative to the item's usual level (1 = usual, 0.9 =
+-- 10% lower), weight = the (decayed) number of scans behind it. Slots
+-- without data are missing.
+function Market.Timing(key, now)
+    local today = DayOf(now or time())
+    local item = data and data.items[key]
+    local tm = item and item.tm
+    local function slots(list, n)
+        local out, rSum, wSum, qSum = {}, 0, 0, 0
+        for i = 1, n do
+            local b = list and list[i]
+            if b and b[2] > 0 then
+                local f = DecayFactor(b[4], today)
+                out[i] = { price = b[1] / b[2], quantity = b[3] / b[2], weight = b[2] * f }
+                rSum, wSum, qSum = rSum + b[1] * f, wSum + b[2] * f, qSum + b[3] * f
+            end
+        end
+        if wSum > 0 then
+            local rAvg, qAvg = rSum / wSum, qSum / wSum
+            for _, slot in pairs(out) do
+                slot.price = rAvg > 0 and slot.price / rAvg or 1
+                slot.quantity = qAvg > 0 and slot.quantity / qAvg or 1
+            end
+        end
+        return out, wSum
+    end
+    local hours, samples = slots(tm and tm.h, Market.TIMING_BLOCKS)
+    local days = slots(tm and tm.w, 7)
+    return { hours = hours, days = days, samples = samples }
 end
 
 -- Per-day series for the Market tab's graph, oldest first, one entry per day
