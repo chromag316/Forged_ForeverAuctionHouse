@@ -1,6 +1,6 @@
 local _, ns = ...
 
--- Addon tabs in Blizzard's auction house window (Deals, Market)
+-- Addon tabs in Blizzard's auction house window (Deals, Market, Ledger)
 --
 -- Works like LibAHTab (the library Auctionator uses; MIT,
 -- github.com/TheMouseNest/LibAHTab), which avoids taint:

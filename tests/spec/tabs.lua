@@ -148,7 +148,7 @@ local blizzSearchBox = newFrame("EditBox")
 AuctionHouseFrame.SearchBar = { SearchBox = blizzSearchBox }
 
 local ns = {}
-for _, f in ipairs({"Core.lua", "History.lua", "Market.lua", "OrderBook.lua", "Disenchant.lua", "Strategy.lua", "Tabs.lua", "StrategyTab.lua", "MarketTab.lua"}) do
+for _, f in ipairs({"Core.lua", "History.lua", "Market.lua", "OrderBook.lua", "Disenchant.lua", "Strategy.lua", "Tabs.lua", "ListTab.lua", "StrategyTab.lua", "MarketTab.lua", "Ledger.lua", "LedgerTab.lua"}) do
   assert(loadfile(DIR .. "/" .. f))("Forged_ForeverAuctionHouse", ns)
 end
 local eventFrame = created[1]
@@ -191,8 +191,8 @@ eq(inset ~= nil, true, "border is a NineSlicePanelTemplate like Blizzard's")
 eq(panel.list.layoutType, "InsetFrameTemplate", "layoutType InsetFrameTemplate")
 local scrollBox, scrollBar
 for _, f in ipairs(created) do
-  if f.template == "WowScrollBoxList" then scrollBox = f end
-  if f.template == "MinimalScrollBar" then scrollBar = f end
+  if f.template == "WowScrollBoxList" and f.parent == panel.list then scrollBox = f end
+  if f.template == "MinimalScrollBar" and f.parent == panel.list then scrollBar = f end
 end
 eq(scrollBox ~= nil, true, "Blizzard's WowScrollBoxList")
 eq(scrollBar ~= nil, true, "Blizzard's MinimalScrollBar")
@@ -240,9 +240,9 @@ eq(refreshBtn.parent, panel, "refresh button on the panel")
 eq(refreshBtn.points[1][2], list, "refresh anchored to the list's top right")
 eq(refreshBtn.points[1][4], -4, "RefreshFrame x offset -4")
 eq(refreshBtn.points[1][5], 24, "RefreshFrame y offset 34, button in the 20-high frame's middle")
--- type tabs: Blizzard's top tab template, first at (52, -43), selected via PanelTemplates
+-- type tabs: Blizzard's top tab template, first at (52, -43), selected via PanelTemplates (the Deals panel's)
 local typeTabs = {}
-for _, f in ipairs(created) do if f.template == "AuctionHouseFrameTopTabTemplate" then typeTabs[#typeTabs + 1] = f end end
+for _, f in ipairs(created) do if f.template == "AuctionHouseFrameTopTabTemplate" and f.parent and f.parent.parent == panel then typeTabs[#typeTabs + 1] = f end end
 eq(#typeTabs, 4, "4 type tabs from Blizzard's top tab template")
 eq(typeTabs[1].text, "Resale", "first tab"); eq(typeTabs[4].text, "Sell from bags", "last tab")
 eq(typeTabs[1].points[1][2], AuctionHouseFrame, "first tab placed on the AH window")
@@ -326,6 +326,25 @@ tab.scripts.OnClick()
 eq(mpanel.shown, false, "Market hidden by Deals"); eq(panel.shown, true, "Deals shown again")
 AuctionHouseFrame:SetDisplayMode(modes.Buy)
 eq(panel.shown, false, "Blizzard view hides Deals"); eq(mpanel.shown, false, "and Market")
+-- Ledger tab: after Market, its own list panel with four lists
+local ltab, lpanel
+for _, f in ipairs(created) do
+  if f.name == "ForgedForeverAHTabLedger" then ltab = f end
+  if f.name == "ForgedForeverAHLedgerPanel" then lpanel = f end
+end
+eq(ltab ~= nil, true, "Ledger tab created"); eq(ltab.text, "Ledger", "Ledger tab text")
+eq(ltab.points[1][2], mtab, "Ledger tab anchored after Market")
+ltab.scripts.OnClick()
+eq(lpanel.shown, true, "Ledger panel shown"); eq(panel.shown, false, "Deals hidden by Ledger")
+eq(#lpanel.typeTabs.Tabs, 4, "Sales, Purchases, Unsold stock, Expired")
+eq(lpanel.typeTabs.Tabs[3].text, "Unsold stock", "stock list")
+eq(lpanel.headers[2].text, "Sold for", "sales columns"); eq(lpanel.itemHeader.text, "Item", "item column")
+eq(lpanel.empty.text:find("Auction successful", 1, true) ~= nil, true, "empty sales text")
+eq(lpanel.summary.text:find("Last 30 days", 1, true) ~= nil, true, "summary in the bottom bar")
+ns.LedgerTab.SetType("purchases")
+eq(lpanel.headers[2].text, "Paid each", "purchase columns")
+AuctionHouseFrame:SetDisplayMode(modes.Buy)
+eq(lpanel.shown, false, "Blizzard view hides the Ledger")
 
 -- search: tracked items by name
 local M = ns.MarketTab

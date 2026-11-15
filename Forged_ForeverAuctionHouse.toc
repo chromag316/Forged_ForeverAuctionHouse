@@ -20,5 +20,8 @@ PercentColumn.xml
 SellInfo.lua
 Strategy.lua
 Tabs.lua
+ListTab.lua
 StrategyTab.lua
 MarketTab.lua
+Ledger.lua
+LedgerTab.lua

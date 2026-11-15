@@ -195,6 +195,24 @@ Features so far:
     - Vendor: what a vendor pays for it (a floor) and sells it for (a ceiling; learned
       at merchants).
     - Disenchant: the expected value of the materials, for disenchantable gear.
+  - **Ledger tab**: a "Ledger" tab after Market, built like the Deals list, with your
+    own results (for all your characters on the realm and faction; kept 90 days):
+    - Sales: sold for (after the 5% cut), cost and profit. The cost is first in, first
+      out: a sale uses up your oldest purchases of the item made before it; units with
+      no purchase behind them (farmed, crafted, bought before the Ledger) have no cost
+      or profit (the tooltip says how many).
+    - Purchases: paid each and in all, and how many are still unsold.
+    - Unsold stock: what you bought and haven't sold, its cost and what it's worth at
+      today's market value after the cut. Purchases unsold after 90 days are dropped.
+    - Expired: expired and cancelled auctions, with an estimate of the deposit lost
+      (the deposit for the sell view's selected duration).
+    - The bottom bar: the last 30 days' sales, profit and spending, and the unsold
+      stock's cost. Click a row to open the item in Blizzard's buy view.
+    - Recorded: purchases when they go through in Blizzard's buy views (stackable items
+      when the server confirms, other items when a buyout completes; bids aren't
+      purchases); sales from the "Auction successful" mails and expired or cancelled
+      auctions from their mails, read when you open your mailbox (a sale whose mail you
+      never open isn't seen). Nothing is bought, posted or taken from the mail.
   - Only items a scan has seen can be found. The graph uses the daily summaries for
     older days and the scan detail for the last 3; between changes the last price
     carries over.

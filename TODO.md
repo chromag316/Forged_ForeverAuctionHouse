@@ -128,8 +128,14 @@ left after costs. In order; 1-4 mostly use data already collected.
    only 3 days of detail):
    - price and supply by time of day and day of week: when to buy, when to sell;
    - 7-day and 30-day averages next to today's price.
-6. **Your own results** (biggest new piece: track purchases, sale mails and own
-   auctions): what you paid, what you sold for, realized profit, unsold stock.
+6. ~~**Your own results**~~ Done as a **Ledger** tab (`Ledger.lua`, `LedgerTab.lua`;
+   the list is shared with Deals in `ListTab.lua`): purchases from Blizzard's buy
+   events, sales and expired/cancelled auctions from their mails; Sales, Purchases,
+   Unsold stock, Expired; first in, first out cost (biggest new piece: track
+   purchases, sale mails and own auctions): what you paid, what you sold for,
+   realized profit, unsold stock.
+   - Later: a per-item summary in the Market tab; won bids (from "Auction won"
+     mails); the real deposit of expired auctions (recorded when posting).
 
 Forever-specific:
 - Random-suffix gear ("of the Eagle" vs. "of the Monkey") sells at very different

@@ -35,6 +35,8 @@ const WOW = `
   PanelTemplates_SetTab PanelTemplates_TabResize PlaySound REFRESH SELL_PRICE
   SLASH_FORGEDFOREVERAH1 SOUNDKIT ScrollBoxConstants ScrollBoxListMixin ScrollUtil
   SetItemButtonTexture GetCVar
+  UnitName StaticPopup_Show GetInboxItem GetInboxItemLink GetInboxNumItems GetInboxHeaderInfo
+  GetInboxInvoiceInfo ATTACHMENTS_MAX_RECEIVE AUCTION_EXPIRED_MAIL_SUBJECT AUCTION_REMOVED_MAIL_SUBJECT
   SlashCmdList TooltipDataProcessor UnitFactionGroup geterrorhandler hooksecurefunc
   issecretvalue
 `;
