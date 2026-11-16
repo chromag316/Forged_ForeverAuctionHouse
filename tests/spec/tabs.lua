@@ -155,6 +155,10 @@ local eventFrame = created[1]
 local function fire(e, ...) eventFrame.scripts.OnEvent(eventFrame, e, ...) end
 fire("ADDON_LOADED", "Forged_ForeverAuctionHouse")
 fire("PLAYER_LOGIN")
+-- Data confidence (Market.Confidence) is tested on its own below; the
+-- other tests use items with only a few scans.
+local realConfidence = { lowScans = 3, lowDays = 1, highScans = 8, highDays = 3 }
+ns.Market.CONFIDENCE.lowScans, ns.Market.CONFIDENCE.lowDays = 0, 0
 fire("ADDON_LOADED", "Blizzard_AuctionHouseUI")
 
 local fails = 0
@@ -426,7 +430,17 @@ eq(rows.sellers.label.text, "Sellers", "sellers row")
 eq(rows.sellers.value.text, "3 to 6 at 3 prices", "commodity: a range (a row names 1 of its 3 owners) at N prices")
 eq(rawget(rows, "auctions"), nil, "no auctions row")
 eq(rows.own.value.text, "|cffff5050undercut|r by 30: 5 at 10c", "your listings: undercut by 30 cheaper units")
-eq(rows.supply.value.text:sub(1, 7), "235 vs ", "supply: now vs average: " .. tostring(rows.supply.value.text))
+eq(rows.supply.value.text:find("235 vs ", 1, true) ~= nil, true, "supply: now vs average: " .. tostring(rows.supply.value.text))
+eq(rows.data.value.text:find("(medium)", 1, true) ~= nil, true, "data row: confidence: " .. tostring(rows.data.value.text))
+eq(rows.supply.value.text:find("|cff808080", 1, true), nil, "medium confidence: nothing grayed")
+ns.Market.CONFIDENCE.lowScans = realConfidence.lowScans
+M.Show("100:0")
+eq(rows.data.value.text:find("|cffff5050(low)|r", 1, true) ~= nil, true, "data row: low in red: " .. tostring(rows.data.value.text))
+eq(rows.supply.value.text:sub(1, 10), "|cff808080", "low confidence: history figures grayed")
+eq(rows.sales.value.text:sub(1, 10), "|cff808080", "sales grayed")
+eq(rows.price.value.text:find("|cff808080", 1, true), nil, "current price not grayed")
+ns.Market.CONFIDENCE.lowScans = 0
+M.Show("100:0")
 eq(rows.sales.value.text:find("days", 1, true), nil, "days of data no longer in the sales row: " .. tostring(rows.sales.value.text))
 eq(rows.data.label.text, "Data", "data row")
 eq(rows.data.value.text:find(" scans, ", 1, true) ~= nil, true, "data row: scans and days: " .. tostring(rows.data.value.text))

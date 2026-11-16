@@ -134,12 +134,20 @@ left after costs. In order; 1-4 mostly use data already collected.
    Unsold stock, Expired; first in, first out cost (biggest new piece: track
    purchases, sale mails and own auctions): what you paid, what you sold for,
    realized profit, unsold stock.
-   - Later: a per-item summary in the Market tab; won bids (from "Auction won"
-     mails); the real deposit of expired auctions (recorded when posting).
+   - Later: won bids (from "Auction won" mails); the real deposit of expired
+     auctions (recorded when posting).
 
-Forever-specific:
-- Random-suffix gear ("of the Eagle" vs. "of the Monkey") sells at very different
-  prices: show one variant, ideally with a comparison of the item's variants.
-- Progression-style content unlocks swing prices: a long-term trend or before/after
-  view helps.
-- Many items have little history: showing data confidence matters.
+7. ~~**Data confidence**~~ Done (`Market.Confidence`; the Data row's level, grayed
+   figures, Deals tooltips, Resale skips low, Sell from bags notes "few data")
+   (Forever: many items have little history). Already shown: the
+   Market tab's Data row (scans and days), the order book's age, faint Timing bars
+   with fewer than 2 scans. To do:
+   - one confidence level per item (low / medium / high) from the scans, days of
+     data and price history behind its figures;
+   - Market tab: the level next to the Data row, and figures resting on too little
+     data marked (e.g. sales/day, sell-through, trend, volatility);
+   - Deals: low-confidence suggestions marked (or left out), so a deal based on one
+     scan doesn't look as good as one based on a week.
+
+Not doing: a per-item Ledger summary in the Market tab, a comparison of an item's
+random-suffix variants, a long-term trend or before/after view.

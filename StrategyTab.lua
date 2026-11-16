@@ -55,6 +55,7 @@ local COLUMNS = {
             local notes = {}
             if r.high then notes[#notes + 1] = "high" end
             if r.rising then notes[#notes + 1] = "rising" end
+            if r.confidence == "low" then notes[#notes + 1] = "few data" end
             return table.concat(notes, ", ")
         end },
     },
@@ -94,13 +95,18 @@ local function Summary()
         Count(tracked), Count(listed), Count(withSales), Ago(ns.Market.LastScan()))
 end
 
--- How old the row's price is: checked when you opened the item, else from
--- a scan.
+-- How old the row's price is, and the data confidence behind its figures.
 local function Tooltip(r)
     local s = r.key and ns.Market.Stats(r.key)
     if s and s.priceTime then
         GameTooltip:AddLine((s.checked and "Price checked %s" or "Price from scan %s"):format(Ago(s.priceTime)),
             1, 1, 1)
+    end
+    if s and s.days then
+        local MT = ns.MarketTab
+        local level = ns.Market.Confidence(s)
+        GameTooltip:AddLine(("Data: %s %s"):format(MT and MT.DataText(s.scans, s.days) or "",
+            MT and MT.ConfidenceText(level) or level), 1, 1, 1)
     end
 end
 

@@ -238,10 +238,21 @@ local ROW_STEP = 21
 local ROW_GAP = 8
 local LABEL_WIDTH = 110
 
+-- Confidence (Market.Confidence) as shown after the Data row's text.
+local CONFIDENCE_COLORS = { low = "|cffff5050", medium = "|cffffff00", high = "|cff40c040" }
+function MarketTab.ConfidenceText(level)
+    return ("%s(%s)|r"):format(CONFIDENCE_COLORS[level] or "", level)
+end
+
+-- With low confidence, the figures that rest on the history are grayed.
+local DIM = "|cff808080"
+local LOW_DATA_ROWS = { "volatility", "trend", "sales", "sellthrough", "dayssupply", "supply" }
+
 -- Values for the rows (OrderBook.lua for below / wall / sellers / own),
 -- and the order book's note. Without a book, the Below value row says why.
 function MarketTab.RowValues(key)
     local s = ns.Market.Stats(key)
+    local confidence = ns.Market.Confidence(s)
     local v = {
         price = s.listed and ("%s (%s listed)"):format(Money(s.price), Count(s.quantity or 0)) or "not listed",
         value = Money(s.value),
@@ -254,6 +265,12 @@ function MarketTab.RowValues(key)
         sellers = "---", own = "---", supply = MarketTab.SupplyText(key, s.quantity),
     }
     v.sellthrough, v.dayssupply = MarketTab.DemandText(s.salesPerDay, s.quantity)
+    if s.days then v.data = v.data .. " " .. MarketTab.ConfidenceText(confidence) end
+    if confidence == "low" then
+        for _, row in ipairs(LOW_DATA_ROWS) do
+            if v[row] ~= "---" then v[row] = DIM .. v[row] .. "|r" end
+        end
+    end
     local OB = ns.OrderBook
     local book = OB.Get(key)
     if not book then

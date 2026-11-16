@@ -364,6 +364,21 @@ function Market.Stats(key, now)
     return stats
 end
 
+-- How much the item's figures (sales, trend, volatility, market value) can
+-- be trusted, from Stats(): "low", "medium" or "high".
+--   low     no market value yet, under 3 scans or under a day of data
+--   high    8+ scans in the last 3 days and 3+ days of data
+--   medium  in between
+-- (Scan times are kept for 3 days, so "high" also needs recent scans.)
+Market.CONFIDENCE = { lowScans = 3, lowDays = 1, highScans = 8, highDays = 3 }
+function Market.Confidence(stats)
+    local c = Market.CONFIDENCE
+    local scans, days = stats.scans or 0, stats.days or 0
+    if not stats.value or scans < c.lowScans or days < c.lowDays then return "low" end
+    if scans >= c.highScans and days >= c.highDays then return "high" end
+    return "medium"
+end
+
 -- Average quantity listed over the last `days` days (default 7), and how
 -- many days of data that's based on; nil with less than 6 hours of data.
 -- Snapshots are only stored on change, so each one's quantity counts until

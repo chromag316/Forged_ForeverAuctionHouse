@@ -104,7 +104,8 @@ Features so far:
   - Suggestions, all after the 5% auction house cut (the deposit is refunded when an
     auction sells, so it's only a cost for listings that don't):
     - **Resale**: listed at least 10% below what relisting at market value earns, and
-      selling at least every two days; ranked by expected profit per day.
+      selling at least every two days, with at least medium data confidence (see the
+      Market tab's Data row); ranked by expected profit per day.
     - **Vendor**: listed below what a vendor pays.
     - **Disenchant**: gear listed below its expected disenchant value.
     - **Sell from bags**: your items with a price just under the lowest listing (or the
@@ -147,7 +148,13 @@ Features so far:
     - Days of supply: how long what's listed would last at that pace ("1.9 days"),
       marked green "(fast)" under 2 days and red "(slow)" over 14.
     - Data: what the figures rest on: completed scans since the item was first seen
-      (scan times are kept for 3 days) and days of data ("6 scans, 2.0 days").
+      (scan times are kept for 3 days) and days of data, and the data confidence
+      ("6 scans, 2.0 days (medium)"): low (red) without a market value, under 3 scans
+      or under a day of data; high (green) with 8+ scans in the last 3 days and 3+
+      days of data; medium (yellow) in between. With low confidence the figures that
+      rest on the history (volatility, trend, sales, sell-through, days of supply,
+      supply) are grayed. The Deals lists show the confidence in their tooltips,
+      Resale leaves low-confidence items out, Sell from bags notes them ("few data").
   - Right panel (where the Sell view lists auctions, same background): a 30-day graph
     of the daily lowest price (gold), daily highest (gray), the market value (blue)
     and estimated sales per day (gray bars), with price and day labels. The refresh

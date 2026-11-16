@@ -7,7 +7,8 @@ local _, ns = ...
 --   resale      Buy items listed well below market value, relist at market
 --               value. Profit after the 5% auction house cut. Ranked by
 --               expected profit per day (profit per item x estimated sales per
---               day, capped by the quantity listed); slow movers are skipped.
+--               day, capped by the quantity listed); slow movers and items with
+--               low data confidence (Market.Confidence) are skipped.
 --   vendor      Items listed below what a vendor pays for them.
 --   disenchant  Gear listed below its expected disenchant value (materials
 --               sold on the auction house, minus the 5% cut).
@@ -51,14 +52,16 @@ function Strategy.Resale()
     local out = {}
     for _, key in ipairs(ns.Market.Keys()) do
         local s = ns.Market.Stats(key)
-        if s.listed and s.price and s.value and s.salesPerDay and s.salesPerDay >= MIN_SALES_PER_DAY then
+        -- Resale rests on the market value and sales: not with low confidence.
+        if s.listed and s.price and s.value and s.salesPerDay and s.salesPerDay >= MIN_SALES_PER_DAY
+            and ns.Market.Confidence(s) ~= "low" then
             local profit = Net(s.value) - s.price
             local roi = profit / s.price
             if profit > 0 and roi >= MIN_RESALE_ROI then
                 out[#out + 1] = {
                     key = key, itemID = ItemID(key), buy = s.price, sell = s.value,
                     profit = profit, roi = roi, salesPerDay = s.salesPerDay, quantity = s.quantity,
-                    score = profit * math.min(s.salesPerDay, s.quantity or 0),
+                    score = profit * math.min(s.salesPerDay, s.quantity or 0), confidence = ns.Market.Confidence(s),
                 }
             end
         end
@@ -78,6 +81,7 @@ function Strategy.Vendor()
             out[#out + 1] = {
                 key = key, itemID = itemID, buy = s.price, vendor = vendor,
                 profit = vendor - s.price, roi = (vendor - s.price) / s.price, quantity = s.quantity,
+                confidence = ns.Market.Confidence(s),
             }
         end
     end
@@ -99,7 +103,7 @@ function Strategy.Disenchant()
                 if profit > 0 then
                     out[#out + 1] = {
                         key = key, itemID = itemID, buy = s.price, disenchant = value,
-                        profit = profit, roi = profit / s.price,
+                        profit = profit, roi = profit / s.price, confidence = ns.Market.Confidence(s),
                     }
                 end
             end
@@ -170,6 +174,7 @@ function Strategy.Sell()
                 price = price, proceeds = Net(price) * item.count, value = s.value,
                 high = s.value and s.listed and s.price and s.price >= s.value * HIGH_MARKET or false,
                 rising = s.trend and s.trend >= RISING_TREND or false,
+                confidence = ns.Market.Confidence(s),
             }
         end
     end

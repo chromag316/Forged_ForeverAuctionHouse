@@ -43,6 +43,10 @@ local ns = {}
 for _, f in ipairs({"Core.lua", "History.lua", "Market.lua", "Disenchant.lua", "Strategy.lua"}) do assert(loadfile(DIR .. "/" .. f))("Forged_ForeverAuctionHouse", ns) end
 fire("ADDON_LOADED", "Forged_ForeverAuctionHouse")
 fire("PLAYER_LOGIN")
+-- Data confidence (Market.Confidence) is tested on its own below; the
+-- other tests use items with only a few scans.
+local realConfidence = { lowScans = 3, lowDays = 1, highScans = 8, highDays = 3 }
+ns.Market.CONFIDENCE.lowScans, ns.Market.CONFIDENCE.lowDays = 0, 0
 
 local fails = 0
 local function eq(a, b, msg) if a ~= b then fails = fails + 1; io.write("FAIL " .. msg .. ": got " .. tostring(a) .. " want " .. tostring(b) .. "\n") end end
@@ -365,4 +369,25 @@ near(a7, 40 / 3, "7-day average of daily lows"); eq(n7, 3, "3 listed days in the
 near(a30, 80 / 4, "30-day average includes the summary day"); eq(n30, 4, "4 listed days")
 data.items["810:0"] = nil
 eq(M.PriceAverages("811:0", now), nil, "no data: no average")
+-- data confidence: low / medium / high from scans, days and a market value
+local CC = M.CONFIDENCE
+CC.lowScans, CC.lowDays = realConfidence.lowScans, realConfidence.lowDays
+eq(M.Confidence({ value = 10, scans = 2, days = 5 }), "low", "under 3 scans: low")
+eq(M.Confidence({ value = 10, scans = 9, days = 0.5 }), "low", "under a day: low")
+eq(M.Confidence({ scans = 9, days = 5 }), "low", "no market value: low")
+eq(M.Confidence({ value = 10, scans = 3, days = 1 }), "medium", "3 scans over a day: medium")
+eq(M.Confidence({ value = 10, scans = 8, days = 2.9 }), "medium", "8 scans but under 3 days: medium")
+eq(M.Confidence({ value = 10, scans = 8, days = 3 }), "high", "8 scans over 3 days: high")
+eq(M.Confidence({}), "low", "nothing known: low")
+-- resale skips low confidence
+local realStats = M.Stats
+M.Stats = function() return { listed = true, price = 50, value = 100, salesPerDay = 5, quantity = 10, scans = 1, days = 0.5 } end
+local realKeys = M.Keys
+M.Keys = function() return { "100:0" } end
+eq(#ns.Strategy.Resale(), 0, "resale: low confidence left out")
+M.Stats = function() return { listed = true, price = 50, value = 100, salesPerDay = 5, quantity = 10, scans = 4, days = 2 } end
+local r = ns.Strategy.Resale()
+eq(#r, 1, "resale: medium confidence shown"); eq(r[1] and r[1].confidence, "medium", "row carries its confidence")
+M.Stats, M.Keys = realStats, realKeys
+CC.lowScans, CC.lowDays = 0, 0
 io.write(fails == 0 and "ALL PASS\n" or (fails .. " FAILURES\n"))
